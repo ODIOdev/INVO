@@ -1,26 +1,243 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --page: #eceef1;
+  --paper: #ffffff;
+  --ink: #0c0c0e;
+  --ink-muted: #6b7280;
+  --ink-faint: #9ca3af;
+  --line: #e5e7eb;
+  --line-soft: #f3f4f6;
+  --brand: #1a56db;
+  --brand-soft: #eff6ff;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ── App shell ── */
+.app-nav {
+  @apply sticky top-0 z-40 border-b border-black/[0.06] bg-white/90 backdrop-blur-md;
+}
+
+.app-nav-inner {
+  @apply mx-auto flex max-w-[960px] items-center justify-between gap-6 px-6 py-3.5;
+}
+
+.app-body {
+  @apply mx-auto max-w-[960px] px-6 py-10;
+}
+
+/* ── Segmented control ── */
+.segmented {
+  @apply inline-flex rounded-lg bg-zinc-100 p-1;
+}
+
+.segmented-btn {
+  @apply rounded-md px-4 py-1.5 text-sm font-medium text-zinc-500 transition;
+}
+
+.segmented-btn-active {
+  @apply bg-white text-zinc-900 shadow-sm;
+}
+
+/* ── Paper document ── */
+.paper {
+  @apply overflow-hidden rounded-lg bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.06)];
+}
+
+.paper-inner {
+  @apply px-8 py-10 sm:px-12 sm:py-12;
+}
+
+.paper-divider {
+  @apply my-8 border-t border-zinc-100;
+}
+
+.doc-label {
+  @apply mb-1.5 block text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-400;
+}
+
+.doc-heading {
+  @apply text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-400;
+}
+
+.doc-masthead {
+  @apply flex items-start justify-between gap-6;
+}
+
+.doc-logo {
+  @apply h-12 w-auto shrink-0 object-contain sm:h-14;
+}
+
+.doc-masthead-meta {
+  @apply min-w-0 flex-1 text-right;
+}
+
+/* ── Inputs ── */
+.field {
+  @apply w-full min-w-0 rounded-md border border-zinc-200 bg-zinc-50/50 px-3 py-2 text-[13px] text-zinc-900 placeholder-zinc-400 transition hover:border-zinc-300 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/10;
+}
+
+.field-table {
+  @apply w-full min-w-0 rounded border border-zinc-200 bg-white px-2.5 py-1.5 text-[13px] text-zinc-900 shadow-sm placeholder-zinc-400 transition hover:border-zinc-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10;
+}
+
+.currency-wrap {
+  @apply flex min-w-0 items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50/50 px-3 py-2 transition hover:border-zinc-300 focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10;
+}
+
+.currency-wrap-table {
+  @apply flex min-w-0 items-center gap-0.5 rounded border border-zinc-200 bg-white px-2.5 py-1.5 shadow-sm transition hover:border-zinc-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10;
+}
+
+.currency-symbol {
+  @apply shrink-0 text-[13px] text-zinc-400;
+}
+
+.currency-field {
+  @apply w-full min-w-0 border-0 bg-transparent p-0 text-[13px] text-zinc-900 placeholder-zinc-300 focus:outline-none;
+}
+
+.select-field {
+  @apply w-full min-w-0 appearance-none rounded-md border border-zinc-200 bg-zinc-50/50 py-2 pr-9 pl-3 text-[13px] text-zinc-900 transition hover:border-zinc-300 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/10;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 0.875rem;
+}
+
+/* ── Line items table ── */
+.line-items {
+  @apply w-full border-collapse overflow-hidden rounded-lg border border-zinc-200 text-[13px];
+}
+
+.line-items thead tr {
+  @apply border-b border-zinc-200 bg-zinc-100;
+}
+
+.line-items th {
+  @apply px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500;
+}
+
+.line-items th:not(:first-child),
+.line-items td:not(:first-child) {
+  @apply border-l border-zinc-100;
+}
+
+.line-items tbody tr:nth-child(odd) {
+  @apply bg-white;
+}
+
+.line-items tbody tr:nth-child(even) {
+  @apply bg-zinc-50;
+}
+
+.line-items tbody tr:hover {
+  @apply bg-blue-50/50;
+}
+
+.line-items td {
+  @apply px-3 py-2 align-middle;
+}
+
+.line-items tbody tr {
+  @apply border-b border-zinc-100;
+}
+
+.line-items tbody tr:last-child {
+  @apply border-b-0;
+}
+
+/* ── Info cards (labor, summary) ── */
+.info-card {
+  @apply rounded-lg border border-zinc-200 bg-zinc-50/80 p-5;
+}
+
+.info-card-heading {
+  @apply mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-400;
+}
+
+/* ── Totals ── */
+.totals-panel {
+  @apply w-full space-y-2.5;
+}
+
+.totals-row {
+  @apply flex items-baseline justify-between gap-6 text-[13px];
+}
+
+.totals-row-label {
+  @apply text-zinc-500;
+}
+
+.totals-row-value {
+  @apply font-medium tabular-nums text-zinc-800;
+}
+
+.totals-grand {
+  @apply mt-3 flex items-baseline justify-between gap-6 border-t border-zinc-200 pt-4;
+}
+
+/* ── Buttons ── */
+.btn {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-zinc-900 px-4 py-2 text-[13px] font-medium text-white transition hover:bg-zinc-800 disabled:opacity-50;
+}
+
+.btn-outline {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-200 bg-white px-4 py-2 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded px-2 py-1 text-[12px] font-medium text-zinc-400 transition hover:text-red-500;
+}
+
+.btn-add {
+  @apply inline-flex items-center gap-1 rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-[12px] font-medium text-zinc-500 transition hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700;
+}
+
+.action-bar {
+  @apply mt-6 flex flex-wrap items-center justify-end gap-2;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.4;
+  cursor: pointer;
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .app-body {
+    max-width: none;
+    padding: 0;
+  }
+
+  .paper {
+    box-shadow: none;
+    border: none;
+  }
+
+  .line-items tbody tr:hover {
+    background: inherit;
+  }
 }

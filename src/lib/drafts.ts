@@ -1,0 +1,212 @@
+export type DocType = "Quote" | "Invoice";
+
+export type ServiceItem = {
+  id: number;
+  service: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+export type ClientInfo = {
+  clientName: string;
+  companyName: string;
+  email: string;
+  phone: string;
+  url: string;
+  projectName: string;
+  documentNumber: string;
+  issueDate: string;
+  dueDate: string;
+};
+
+export type DraftState = {
+  docType: DocType;
+  taxRate: number;
+  client: ClientInfo;
+  services: ServiceItem[];
+  laborTitle: string;
+  laborHours: number;
+  laborRate: number;
+  deposit: number;
+  notes: string;
+};
+
+export type SavedDraft = {
+  id: string;
+  savedAt: string;
+  state: DraftState;
+};
+
+const DRAFTS_KEY = "overdrive-invoice-drafts";
+const LEGACY_DRAFT_KEY = "overdrive-invoice-draft";
+
+export function getTodayDate(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+export function getDefaultDueDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 30);
+  return date.toISOString().split("T")[0];
+}
+
+export function generateDocumentNumber(docType: DocType): string {
+  const prefix = docType === "Quote" ? "QTE" : "INV";
+  return `${prefix}-${Date.now().toString().slice(-6)}`;
+}
+
+export function createDefaultState(docType: DocType = "Quote"): DraftState {
+  return {
+    docType,
+    taxRate: 0.08,
+    client: {
+      clientName: "",
+      companyName: "",
+      email: "",
+      phone: "",
+      url: "",
+      projectName: "",
+      documentNumber: generateDocumentNumber(docType),
+      issueDate: getTodayDate(),
+      dueDate: getDefaultDueDate(),
+    },
+    services: [
+      {
+        id: 1,
+        service: "",
+        description: "",
+        quantity: 1,
+        unitPrice: 0,
+      },
+    ],
+    laborTitle: "",
+    laborHours: 0,
+    laborRate: 0,
+    deposit: 0,
+    notes: "",
+  };
+}
+
+export function calculateGrandTotal(state: DraftState): number {
+  return calculateDraftTotals(state).grandTotal;
+}
+
+export function calculateDraftTotals(state: DraftState) {
+  const serviceSubtotal = state.services.reduce(
+    (sum, item) => sum + item.quantity * item.unitPrice,
+    0
+  );
+  const laborTotal = state.laborHours * state.laborRate;
+  const subtotal = serviceSubtotal + laborTotal;
+  const taxAmount = subtotal * state.taxRate;
+  const grandTotal = subtotal + taxAmount;
+  const deposit = state.deposit ?? 0;
+  const balanceDue = Math.max(0, grandTotal - deposit);
+
+  return {
+    serviceSubtotal,
+    laborTotal,
+    subtotal,
+    taxAmount,
+    grandTotal,
+    deposit,
+    balanceDue,
+  };
+}
+
+export function formatMoney(amount: number): string {
+  return amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+}
+
+function readDrafts(): SavedDraft[] {
+  if (typeof window === "undefined") return [];
+  const raw = localStorage.getItem(DRAFTS_KEY);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as SavedDraft[];
+  } catch {
+    return [];
+  }
+}
+
+function writeDrafts(drafts: SavedDraft[]): void {
+  localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+}
+
+export function migrateLegacyDraft(): void {
+  if (typeof window === "undefined") return;
+  const legacy = localStorage.getItem(LEGACY_DRAFT_KEY);
+  if (!legacy) return;
+
+  try {
+    const state = JSON.parse(legacy) as DraftState;
+    const drafts = readDrafts();
+    const alreadyMigrated = drafts.some(
+      (d) => d.state.client.documentNumber === state.client.documentNumber
+    );
+    if (!alreadyMigrated) {
+      drafts.unshift({
+        id: crypto.randomUUID(),
+        savedAt: new Date().toISOString(),
+        state,
+      });
+      writeDrafts(drafts);
+    }
+    localStorage.removeItem(LEGACY_DRAFT_KEY);
+  } catch {
+    localStorage.removeItem(LEGACY_DRAFT_KEY);
+  }
+}
+
+export function listDrafts(): SavedDraft[] {
+  migrateLegacyDraft();
+  return readDrafts().sort(
+    (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
+  );
+}
+
+export function getDraft(id: string): SavedDraft | null {
+  migrateLegacyDraft();
+  return readDrafts().find((d) => d.id === id) ?? null;
+}
+
+export function saveDraftToLibrary(
+  state: DraftState,
+  id?: string | null
+): string {
+  migrateLegacyDraft();
+  const drafts = readDrafts();
+  const savedAt = new Date().toISOString();
+
+  if (id) {
+    const index = drafts.findIndex((d) => d.id === id);
+    if (index >= 0) {
+      drafts[index] = { id, savedAt, state };
+      writeDrafts(drafts);
+      return id;
+    }
+  }
+
+  const newId = crypto.randomUUID();
+  drafts.unshift({ id: newId, savedAt, state });
+  writeDrafts(drafts);
+  return newId;
+}
+
+export function deleteDraft(id: string): void {
+  writeDrafts(readDrafts().filter((d) => d.id !== id));
+}
+
+export function formatSavedDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
