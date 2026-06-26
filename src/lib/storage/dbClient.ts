@@ -285,8 +285,47 @@ export async function deleteStoredRecord(id: string) {
   return response.json();
 }
 
+export async function deleteDraftEverywhere(id: string): Promise<void> {
+  const { deleteDraft } = await import("@/lib/drafts");
+  deleteDraft(id);
+
+  const relatedIds = [
+    `draft-${id}`,
+    `doc-${id}`,
+    `client-${id}`,
+    `labor-${id}`,
+    `notes-${id}`,
+  ];
+
+  await Promise.allSettled(
+    relatedIds.map((recordId) => deleteStoredRecord(recordId))
+  );
+}
+
+export async function pullServerDraftsToLocal(): Promise<number> {
+  const { saveDraftToLibrary, listDrafts } = await import("@/lib/drafts");
+  const serverDrafts = await fetchServerDrafts();
+  const localIds = new Set(listDrafts().map((d) => d.id));
+  let pulled = 0;
+
+  for (const draft of serverDrafts) {
+    if (!localIds.has(draft.id)) {
+      saveDraftToLibrary(draft.state, draft.id);
+      pulled++;
+    }
+  }
+
+  return pulled;
+}
+
 export async function runAppInitSync(): Promise<SyncResult | null> {
   if (typeof window === "undefined") return null;
+
+  try {
+    await pullServerDraftsToLocal();
+  } catch {
+    // cloud may be unavailable locally
+  }
 
   const { listDrafts } = await import("@/lib/drafts");
   const drafts = listDrafts();

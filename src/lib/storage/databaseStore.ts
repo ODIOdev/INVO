@@ -25,17 +25,31 @@ function normalizeDatabase(parsed: DatabaseSchema): DatabaseSchema {
   };
 }
 
+function getRedisEnv(): { url: string; token: string } | null {
+  const url =
+    process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL ?? "";
+  const token =
+    process.env.UPSTASH_REDIS_REST_TOKEN ??
+    process.env.KV_REST_API_TOKEN ??
+    "";
+  if (!url || !token) return null;
+  return { url, token };
+}
+
 function useRedisStorage(): boolean {
-  return Boolean(
-    process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-  );
+  return getRedisEnv() !== null;
 }
 
 let redisClient: Redis | null = null;
 
 function getRedisClient(): Redis {
   if (!redisClient) {
-    redisClient = Redis.fromEnv();
+    const env = getRedisEnv();
+    if (env) {
+      redisClient = new Redis({ url: env.url, token: env.token });
+    } else {
+      redisClient = Redis.fromEnv();
+    }
   }
   return redisClient;
 }

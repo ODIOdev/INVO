@@ -115,7 +115,7 @@ export default function InvoiceCompletePage() {
       <nav className="app-nav no-print">
         <div className="app-nav-inner">
           <Link
-            href="/index"
+            href="/"
             className="rounded-md transition opacity-90 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             aria-label="Back to home"
           >
@@ -161,7 +161,7 @@ export default function InvoiceCompletePage() {
         <InvoiceDocumentPreview state={state} />
 
         <div className="action-bar no-print">
-          <Link href="/index" className="btn-outline">
+          <Link href="/" className="btn-outline">
             Back to Home
           </Link>
           <button

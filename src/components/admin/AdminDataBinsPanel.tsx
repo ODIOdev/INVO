@@ -138,7 +138,7 @@ export default function AdminDataBinsPanel({
             </h1>
           </div>
           <nav className="flex flex-wrap items-center gap-2">
-            <Link href="/index" className="btn-outline text-xs">
+            <Link href="/" className="btn-outline text-xs">
               Home
             </Link>
             <Link href="/invoice" className="btn-outline text-xs">

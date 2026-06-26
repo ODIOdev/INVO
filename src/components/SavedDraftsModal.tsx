@@ -11,7 +11,7 @@ import {
   saveDraftToLibrary,
   type SavedDraft,
 } from "@/lib/drafts";
-import { loadAllDrafts } from "@/lib/storage/dbClient";
+import { deleteDraftEverywhere, loadAllDrafts } from "@/lib/storage/dbClient";
 
 type SavedDraftsModalProps = {
   open: boolean;
@@ -30,7 +30,11 @@ export function SavedDraftsModal({
 }: SavedDraftsModalProps) {
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this saved draft?")) return;
-    deleteDraft(id);
+    try {
+      await deleteDraftEverywhere(id);
+    } catch {
+      deleteDraft(id);
+    }
     await onRefresh();
   };
 

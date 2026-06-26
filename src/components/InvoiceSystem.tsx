@@ -253,12 +253,12 @@ export default function InvoiceSystem() {
     const id = saveDraftToLibrary(state, currentDraftId);
     syncCurrentToDatabase(id);
     setShowExitPrompt(false);
-    router.push("/index");
+    router.push("/");
   };
 
   const handleExitDiscard = () => {
     setShowExitPrompt(false);
-    router.push("/index");
+    router.push("/");
   };
 
   return (
