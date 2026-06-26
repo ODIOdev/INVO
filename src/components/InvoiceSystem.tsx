@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import InvoicePaperFooter from "@/components/InvoicePaperFooter";
 import InvoicePaperHeader from "@/components/InvoicePaperHeader";
 import {
   createDefaultState,
@@ -184,7 +185,7 @@ export default function InvoiceSystem() {
     setIsExporting(true);
     try {
       const filename = client.documentNumber || docType;
-      await exportPdf("invoice-preview", filename);
+      await exportPdf("invoice-preview", filename, state);
       setToast({ message: "PDF downloaded to your device", type: "success" });
     } catch (error) {
       console.error("PDF export failed:", error);
@@ -702,6 +703,8 @@ export default function InvoiceSystem() {
                 }
               />
             </div>
+
+            <InvoicePaperFooter />
           </div>
         </article>
 

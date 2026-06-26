@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   calculateGrandTotal,
   deleteDraft,
@@ -162,7 +162,11 @@ export function SavedDraftsButton({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const [drafts, setDrafts] = useState<SavedDraft[]>([]);
   const [loading, setLoading] = useState(false);
-  const [count, setCount] = useState(() => listDrafts().length);
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    setCount(listDrafts().length);
+  }, []);
 
   const refreshDrafts = async () => {
     setLoading(true);

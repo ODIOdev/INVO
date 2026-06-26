@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import InvoiceDocumentPreview from "@/components/InvoiceDocumentPreview";
-import { calculateDraftTotals, formatMoney, getDraft } from "@/lib/drafts";
-import { downloadPdf as exportPdf } from "@/lib/pdf-export";
+import { calculateDraftTotals, formatMoney, getDraft, type SavedDraft } from "@/lib/drafts";
 
 type Toast = { message: string; type: "success" | "error" } | null;
 
@@ -16,16 +15,25 @@ export default function InvoiceCompletePage() {
   const draftId = searchParams.get("draft");
   const syncFailed = searchParams.get("sync") === "failed";
 
-  const draft = draftId ? getDraft(draftId) : null;
+  const [draft, setDraft] = useState<SavedDraft | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
   const autoExportStarted = useRef(false);
 
   useEffect(() => {
-    if (!draft) {
+    if (!draftId) {
       router.replace("/invoice");
+      return;
     }
-  }, [draft, router]);
+
+    const found = getDraft(draftId);
+    if (!found) {
+      router.replace("/invoice");
+      return;
+    }
+
+    setDraft(found);
+  }, [draftId, router]);
 
   useEffect(() => {
     if (!toast) return;
@@ -39,9 +47,10 @@ export default function InvoiceCompletePage() {
 
     const timer = setTimeout(async () => {
       try {
+        const { downloadPdf: exportPdf } = await import("@/lib/pdf-export");
         const filename =
           draft.state.client.documentNumber || draft.state.docType;
-        await exportPdf("invoice-preview", filename);
+        await exportPdf("invoice-preview", filename, draft.state);
         setToast({ message: "PDF downloaded to your device", type: "success" });
       } catch (error) {
         console.error("PDF export failed:", error);
@@ -65,15 +74,33 @@ export default function InvoiceCompletePage() {
   const { balanceDue } = calculateDraftTotals(state);
   const savedToAdmin = !syncFailed;
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    setIsExporting(true);
+    try {
+      const { openPdfForPrint } = await import("@/lib/pdf-export");
+      const filename = client.documentNumber || docType;
+      const result = await openPdfForPrint("invoice-preview", filename, state);
+      setToast({
+        message:
+          result === "opened"
+            ? "PDF opened — use Print in the PDF tab (⌘P / Ctrl+P)."
+            : "PDF downloaded — open the file and print from Preview or Adobe Reader.",
+        type: "success",
+      });
+    } catch (error) {
+      console.error("Print PDF failed:", error);
+      setToast({ message: "Failed to generate print PDF", type: "error" });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleDownloadPdf = async () => {
     setIsExporting(true);
     try {
+      const { downloadPdf: exportPdf } = await import("@/lib/pdf-export");
       const filename = client.documentNumber || docType;
-      await exportPdf("invoice-preview", filename);
+      await exportPdf("invoice-preview", filename, state);
       setToast({ message: "PDF downloaded to your device", type: "success" });
     } catch (error) {
       console.error("PDF export failed:", error);
@@ -137,8 +164,13 @@ export default function InvoiceCompletePage() {
           <Link href="/index" className="btn-outline">
             Back to Home
           </Link>
-          <button type="button" onClick={handlePrint} className="btn-outline">
-            Print
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={isExporting}
+            className="btn-outline"
+          >
+            {isExporting ? "Preparing…" : "Print"}
           </button>
           <button
             type="button"

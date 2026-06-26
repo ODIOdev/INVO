@@ -1,3 +1,4 @@
+import InvoicePaperFooter from "@/components/InvoicePaperFooter";
 import InvoicePaperHeader from "@/components/InvoicePaperHeader";
 import {
   calculateDraftTotals,
@@ -203,6 +204,7 @@ export default function InvoiceDocumentPreview({
             </div>
           </>
         )}
+        <InvoicePaperFooter />
       </div>
     </article>
   );
