@@ -233,6 +233,50 @@ export async function finalizeCompletedInvoice(
   }
 }
 
+export async function fetchServerDrafts(): Promise<SavedDraft[]> {
+  const response = await fetch("/api/drafts", { cache: "no-store" });
+  if (!response.ok) throw new Error("Failed to load cloud drafts");
+  const data = (await response.json()) as { drafts: SavedDraft[] };
+  return data.drafts;
+}
+
+export function mergeDraftLists(
+  localDrafts: SavedDraft[],
+  serverDrafts: SavedDraft[]
+): SavedDraft[] {
+  const merged = new Map<string, SavedDraft>();
+
+  for (const draft of [...localDrafts, ...serverDrafts]) {
+    const existing = merged.get(draft.id);
+    if (!existing) {
+      merged.set(draft.id, draft);
+      continue;
+    }
+
+    const existingTime = new Date(existing.savedAt).getTime();
+    const draftTime = new Date(draft.savedAt).getTime();
+    if (draftTime >= existingTime) {
+      merged.set(draft.id, draft);
+    }
+  }
+
+  return Array.from(merged.values()).sort(
+    (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
+  );
+}
+
+export async function loadAllDrafts(): Promise<SavedDraft[]> {
+  const { listDrafts } = await import("@/lib/drafts");
+  const localDrafts = listDrafts();
+
+  try {
+    const serverDrafts = await fetchServerDrafts();
+    return mergeDraftLists(localDrafts, serverDrafts);
+  } catch {
+    return localDrafts;
+  }
+}
+
 export async function deleteStoredRecord(id: string) {
   const response = await fetch(`/api/storage/records/${id}`, {
     method: "DELETE",

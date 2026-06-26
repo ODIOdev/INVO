@@ -8,26 +8,34 @@ import {
   formatMoney,
   formatSavedDate,
   listDrafts,
+  saveDraftToLibrary,
   type SavedDraft,
 } from "@/lib/drafts";
+import { loadAllDrafts } from "@/lib/storage/dbClient";
 
 type SavedDraftsModalProps = {
   open: boolean;
   drafts: SavedDraft[];
+  loading: boolean;
   onClose: () => void;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
 };
 
 export function SavedDraftsModal({
   open,
   drafts,
+  loading,
   onClose,
   onRefresh,
 }: SavedDraftsModalProps) {
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this saved draft?")) return;
     deleteDraft(id);
-    onRefresh();
+    await onRefresh();
+  };
+
+  const handleOpen = (draft: SavedDraft) => {
+    saveDraftToLibrary(draft.state, draft.id);
   };
 
   if (!open) return null;
@@ -49,7 +57,7 @@ export function SavedDraftsModal({
               Saved Drafts
             </h2>
             <p className="mt-0.5 text-sm text-zinc-500">
-              Quotes, invoices, and drafts saved on this device
+              Quotes and invoices saved to the cloud — accessible from any device
             </p>
           </div>
           <button
@@ -63,7 +71,11 @@ export function SavedDraftsModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {drafts.length === 0 ? (
+          {loading ? (
+            <p className="py-12 text-center text-sm text-zinc-500">
+              Loading drafts from cloud…
+            </p>
+          ) : drafts.length === 0 ? (
             <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-6 py-12 text-center">
               <p className="text-sm font-medium text-zinc-700">No saved drafts</p>
               <p className="mt-1 text-sm text-zinc-500">
@@ -113,7 +125,10 @@ export function SavedDraftsModal({
                         <Link
                           href={`/invoice?draft=${draft.id}`}
                           className="btn px-3 py-1.5 text-xs"
-                          onClick={onClose}
+                          onClick={() => {
+                            handleOpen(draft);
+                            onClose();
+                          }}
                         >
                           Open
                         </Link>
@@ -146,13 +161,23 @@ export function SavedDraftsModal({
 export function SavedDraftsButton({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const [drafts, setDrafts] = useState<SavedDraft[]>([]);
+  const [loading, setLoading] = useState(false);
   const [count, setCount] = useState(() => listDrafts().length);
 
-  const handleOpen = () => {
-    const latest = listDrafts();
-    setDrafts(latest);
-    setCount(latest.length);
+  const refreshDrafts = async () => {
+    setLoading(true);
+    try {
+      const latest = await loadAllDrafts();
+      setDrafts(latest);
+      setCount(latest.length);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpen = async () => {
     setOpen(true);
+    await refreshDrafts();
   };
 
   return (
@@ -167,8 +192,9 @@ export function SavedDraftsButton({ className }: { className?: string }) {
       <SavedDraftsModal
         open={open}
         drafts={drafts}
+        loading={loading}
         onClose={() => setOpen(false)}
-        onRefresh={() => setDrafts(listDrafts())}
+        onRefresh={refreshDrafts}
       />
     </>
   );

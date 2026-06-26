@@ -1,5 +1,3 @@
-import { promises as fs } from "fs";
-import path from "path";
 import {
   buildRecordLabel,
   type BinSummary,
@@ -9,50 +7,18 @@ import {
   isDataBinId,
   type StoredRecord,
 } from "./dataBins";
-
-const DB_VERSION = 1;
-const DB_DIR = path.join(process.cwd(), ".data");
-const DB_FILE = path.join(DB_DIR, "internal-db.json");
-
-function emptyDatabase(): DatabaseSchema {
-  return {
-    version: DB_VERSION,
-    records: [],
-    lastSyncedAt: null,
-  };
-}
-
-async function ensureDatabase(): Promise<void> {
-  await fs.mkdir(DB_DIR, { recursive: true });
-  try {
-    await fs.access(DB_FILE);
-  } catch {
-    await fs.writeFile(
-      DB_FILE,
-      JSON.stringify(emptyDatabase(), null, 2),
-      "utf-8"
-    );
-  }
-}
+import {
+  emptyDatabase,
+  loadDatabase,
+  saveDatabase,
+} from "./databaseStore";
 
 export async function readDatabase(): Promise<DatabaseSchema> {
-  await ensureDatabase();
-  const raw = await fs.readFile(DB_FILE, "utf-8");
-  try {
-    const parsed = JSON.parse(raw) as DatabaseSchema;
-    return {
-      version: parsed.version ?? DB_VERSION,
-      records: Array.isArray(parsed.records) ? parsed.records : [],
-      lastSyncedAt: parsed.lastSyncedAt ?? null,
-    };
-  } catch {
-    return emptyDatabase();
-  }
+  return loadDatabase();
 }
 
 async function writeDatabase(db: DatabaseSchema): Promise<void> {
-  await ensureDatabase();
-  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), "utf-8");
+  await saveDatabase(db);
 }
 
 export async function getBinSummaries(): Promise<BinSummary[]> {
@@ -61,9 +27,10 @@ export async function getBinSummaries(): Promise<BinSummary[]> {
     const binRecords = db.records.filter((r) => r.binId === binId);
     const lastUpdated =
       binRecords.length > 0
-        ? binRecords.reduce((latest, r) =>
-            r.updatedAt > latest ? r.updatedAt : latest
-          , binRecords[0].updatedAt)
+        ? binRecords.reduce(
+            (latest, r) => (r.updatedAt > latest ? r.updatedAt : latest),
+            binRecords[0].updatedAt
+          )
         : null;
 
     return {
@@ -198,3 +165,5 @@ export async function getDatabaseStats() {
 export function parseBinId(value: string): DataBinId | null {
   return isDataBinId(value) ? value : null;
 }
+
+export { emptyDatabase, getStorageBackend } from "./databaseStore";
