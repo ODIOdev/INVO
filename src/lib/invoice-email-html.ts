@@ -52,37 +52,23 @@ function hrefAttr(url: string): string {
   return url.replace(/"/g, "&quot;");
 }
 
-/** Inline + class styles that resist Gmail/Apple Mail dark-mode color inversion */
-const WHITE_BG =
-  "background-color:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);";
+/** White background styles that resist some dark-mode inversions */
+const WHITE_BG = "background-color:#ffffff;";
 
 const EMAIL_HEAD = `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light only">
-<meta name="supported-color-schemes" content="light only">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
 <style type="text/css">
-  :root { color-scheme: light only; supported-color-schemes: light only; }
-  body, table, td, div, p, span, a { color-scheme: light only; }
-  .email-bg { ${WHITE_BG} }
-  .gmail-blend-screen { background:#000; mix-blend-mode:screen; }
-  .gmail-blend-difference { background:#000; mix-blend-mode:difference; }
+  body { margin:0; padding:0; }
   @media (prefers-color-scheme: dark) {
-    body, .email-bg, .email-card, .email-panel, .email-payment {
-      background-color:#ffffff !important;
-      background-image:linear-gradient(#ffffff,#ffffff) !important;
-    }
-    .email-title, .email-value, .email-line-item, .email-payment-amount, .email-total {
-      color:#18181b !important;
-    }
+    .email-bg, .email-card, .email-panel, .email-payment { background-color:#ffffff !important; }
+    .email-title, .email-value, .email-line-item, .email-payment-amount, .email-total { color:#18181b !important; }
     .email-subtitle, .email-muted { color:#71717a !important; }
     .email-label { color:#9ca3af !important; }
     .email-body-text { color:#3f3f46 !important; }
     .email-footer { color:#a1a1aa !important; }
     .email-stripe-link { color:#635bff !important; }
-  }
-  [data-ogsc] .email-bg, [data-ogsb] .email-bg {
-    background-color:#ffffff !important;
-    background-image:linear-gradient(#ffffff,#ffffff) !important;
   }
 </style>`;
 
@@ -137,12 +123,12 @@ export function generateInvoiceEmailHtml(
 
   const lineRows = services
     .map(
-      (item, index) => `<tr style="${index % 2 === 1 ? WHITE_BG : WHITE_BG}">
-        <td class="email-line-item" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;font-size:13px;color:#18181b;${WHITE_BG}">${esc((item.service ?? "").trim() || "-")}</td>
-        <td class="email-body-text" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;border-left:1px solid #f4f4f5;font-size:13px;color:#3f3f46;${WHITE_BG}">${esc((item.description ?? "").trim() || "-")}</td>
-        <td class="email-line-item" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;border-left:1px solid #f4f4f5;font-size:13px;color:#27272a;text-align:center;${WHITE_BG}">${item.quantity}</td>
-        <td class="email-line-item" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;border-left:1px solid #f4f4f5;font-size:13px;color:#27272a;text-align:right;${WHITE_BG}">${moneyForEmail(item.unitPrice)}</td>
-        <td class="email-line-item" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;border-left:1px solid #f4f4f5;font-size:13px;color:#27272a;font-weight:600;text-align:right;${WHITE_BG}">${moneyForEmail(item.quantity * item.unitPrice)}</td>
+      (item, index) => `<tr style="background:${index % 2 === 1 ? "#fafafa" : "#ffffff"};">
+        <td class="email-line-item" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;font-size:13px;color:#18181b;">${esc((item.service ?? "").trim() || "-")}</td>
+        <td class="email-body-text" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;border-left:1px solid #f4f4f5;font-size:13px;color:#3f3f46;">${esc((item.description ?? "").trim() || "-")}</td>
+        <td class="email-line-item" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;border-left:1px solid #f4f4f5;font-size:13px;color:#27272a;text-align:center;">${item.quantity}</td>
+        <td class="email-line-item" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;border-left:1px solid #f4f4f5;font-size:13px;color:#27272a;text-align:right;">${moneyForEmail(item.unitPrice)}</td>
+        <td class="email-line-item" style="padding:10px 12px;border-bottom:1px solid #f4f4f5;border-left:1px solid #f4f4f5;font-size:13px;color:#27272a;font-weight:600;text-align:right;">${moneyForEmail(item.quantity * item.unitPrice)}</td>
       </tr>`
     )
     .join("");
@@ -190,11 +176,11 @@ export function generateInvoiceEmailHtml(
 <head>${EMAIL_HEAD}</head>
 <body class="email-bg" bgcolor="#ffffff" style="margin:0;padding:0;${WHITE_BG}font-family:Arial,Helvetica,sans-serif;color:#18181b;">
   <table width="100%" cellpadding="0" cellspacing="0" class="email-bg" bgcolor="#ffffff" style="${WHITE_BG}padding:24px 12px;">
-    <tr><td align="center" class="email-bg" bgcolor="#ffffff" style="${WHITE_BG}">
-      <div class="gmail-blend-screen">
-        <div class="gmail-blend-difference">
-      <table width="640" cellpadding="0" cellspacing="0" class="email-card email-bg" bgcolor="#ffffff" style="max-width:640px;${WHITE_BG}border-radius:8px;overflow:hidden;">
-        <tr><td class="email-bg" bgcolor="#ffffff" style="padding:32px 40px;${WHITE_BG}">
+    <tr>
+      <td align="center" class="email-bg" bgcolor="#ffffff" style="${WHITE_BG}">
+      <table width="640" cellpadding="0" cellspacing="0" class="email-card email-bg" bgcolor="#ffffff" style="max-width:640px;width:100%;${WHITE_BG}border-radius:8px;">
+        <tr>
+          <td class="email-bg" bgcolor="#ffffff" style="padding:32px 40px;${WHITE_BG}">
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td valign="top">${logoHtml}</td>
@@ -238,8 +224,8 @@ export function generateInvoiceEmailHtml(
           <div class="email-label" style="margin:24px 0 8px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;">Line Items</div>
           <table width="100%" cellpadding="0" cellspacing="0" class="email-bg" style="border:1px solid #e4e4e7;border-radius:8px;overflow:hidden;border-collapse:separate;${WHITE_BG}">
             <thead>
-              <tr style="${WHITE_BG}">
-                <th align="left" class="email-muted" style="padding:10px 12px;font-size:11px;font-weight:600;color:#71717a;text-transform:uppercase;background-image:linear-gradient(#f4f4f5,#f4f4f5);background-color:#f4f4f5;">Item</th>
+              <tr style="background:#f4f4f5;">
+                <th align="left" class="email-muted" style="padding:10px 12px;font-size:11px;font-weight:600;color:#71717a;text-transform:uppercase;">Item</th>
                 <th align="left" style="padding:10px 12px;border-left:1px solid #e4e4e7;font-size:11px;font-weight:600;color:#71717a;text-transform:uppercase;">Description</th>
                 <th align="center" style="padding:10px 12px;border-left:1px solid #e4e4e7;font-size:11px;font-weight:600;color:#71717a;text-transform:uppercase;">Qty</th>
                 <th align="right" style="padding:10px 12px;border-left:1px solid #e4e4e7;font-size:11px;font-weight:600;color:#71717a;text-transform:uppercase;">Rate</th>
@@ -281,11 +267,11 @@ export function generateInvoiceEmailHtml(
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
             <tr><td align="center" class="email-footer" style="font-size:11px;font-weight:500;color:#a1a1aa;letter-spacing:0.04em;">www.overdriveio.com</td></tr>
           </table>
-        </td></tr>
+          </td>
+        </tr>
       </table>
-        </div>
-      </div>
-    </td></tr>
+      </td>
+    </tr>
   </table>
 </body>
 </html>`;
