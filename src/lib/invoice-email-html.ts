@@ -306,7 +306,13 @@ export function generateInvoicePlainText(
     lines.unshift("", `Pay online: ${options.paymentUrl}`, "");
   }
 
-  lines.push("", "— Over Drive OS", "www.overdriveio.com");
+  lines.push(
+    "",
+    `A PDF copy of this ${docType.toLowerCase()} is attached.`,
+    "",
+    "— Over Drive OS",
+    "www.overdriveio.com"
+  );
 
   return lines.filter(Boolean).join("\n");
 }

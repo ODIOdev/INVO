@@ -8,6 +8,10 @@ import {
   generateInvoicePlainText,
 } from "@/lib/invoice-email-html";
 import { buildInvoicePaymentLink } from "@/lib/stripe-checkout";
+import {
+  generateInvoicePdfBuffer,
+  getInvoicePdfFilename,
+} from "@/lib/invoice-pdf";
 
 function getPublicAppUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL?.trim()) {
@@ -96,6 +100,16 @@ function isResendTestModeError(message: string): boolean {
   );
 }
 
+async function buildPdfEmailAttachment(state: DraftState): Promise<{
+  filename: string;
+  content: Buffer;
+}> {
+  return {
+    filename: getInvoicePdfFilename(state),
+    content: await generateInvoicePdfBuffer(state),
+  };
+}
+
 export async function sendInvoiceEmail(
   state: DraftState,
   to: string
@@ -137,6 +151,7 @@ export async function sendInvoiceViaResend(
     to,
     logo ?? getHostedLogoUrl()
   );
+  const pdfAttachment = await buildPdfEmailAttachment(state);
 
   const { error } = await resend.emails.send({
     from: getFromAddress(),
@@ -144,6 +159,12 @@ export async function sendInvoiceViaResend(
     subject,
     html,
     text: plainText,
+    attachments: [
+      {
+        filename: pdfAttachment.filename,
+        content: pdfAttachment.content,
+      },
+    ],
   });
 
   if (error) {
@@ -161,6 +182,7 @@ export async function sendInvoiceViaSmtp(
     to,
     logo ?? getHostedLogoUrl()
   );
+  const pdfAttachment = await buildPdfEmailAttachment(state);
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -178,6 +200,13 @@ export async function sendInvoiceViaSmtp(
     subject,
     html,
     text: plainText,
+    attachments: [
+      {
+        filename: pdfAttachment.filename,
+        content: pdfAttachment.content,
+        contentType: "application/pdf",
+      },
+    ],
     headers: {
       "Color-Scheme": "light",
       "X-Color-Scheme": "light",

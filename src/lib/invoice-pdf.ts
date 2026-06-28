@@ -42,6 +42,19 @@ function moneyForPdf(amount: number): string {
 }
 
 async function loadLogoBase64(): Promise<string | null> {
+  if (typeof window === "undefined") {
+    try {
+      const { readFile } = await import("fs/promises");
+      const pathModule = await import("path");
+      const buffer = await readFile(
+        pathModule.join(process.cwd(), "public", "overdrive-logo.png")
+      );
+      return `data:image/png;base64,${buffer.toString("base64")}`;
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const response = await fetch("/overdrive-logo.png");
     if (!response.ok) return null;
@@ -394,9 +407,14 @@ function drawBottomPanels(
   return panelTop + panelH + SP.afterBox;
 }
 
-export async function generateInvoicePdfBlob(
-  state: DraftState
-): Promise<Blob> {
+export function getInvoicePdfFilename(state: DraftState): string {
+  const base = (state.client.documentNumber || state.docType)
+    .replace(/[^\w.-]/g, "_")
+    .replace(/\.pdf$/i, "");
+  return `${base || "document"}.pdf`;
+}
+
+async function buildInvoicePdfDocument(state: DraftState): Promise<jsPDF> {
   const pdf = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
   let y = MARGIN;
 
@@ -458,5 +476,19 @@ export async function generateInvoicePdfBlob(
   pdf.setTextColor(150, 150, 150);
   pdf.text("www.overdriveio.com", PAGE_W / 2, FOOTER_Y, { align: "center" });
 
+  return pdf;
+}
+
+export async function generateInvoicePdfBlob(
+  state: DraftState
+): Promise<Blob> {
+  const pdf = await buildInvoicePdfDocument(state);
   return pdf.output("blob");
+}
+
+export async function generateInvoicePdfBuffer(
+  state: DraftState
+): Promise<Buffer> {
+  const pdf = await buildInvoicePdfDocument(state);
+  return Buffer.from(pdf.output("arraybuffer"));
 }
