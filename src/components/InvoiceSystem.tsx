@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import InvoicePaperFooter from "@/components/InvoicePaperFooter";
@@ -80,6 +79,7 @@ export default function InvoiceSystem() {
   const [toast, setToast] = useState<Toast>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [showExitPrompt, setShowExitPrompt] = useState(false);
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null);
@@ -266,6 +266,30 @@ export default function InvoiceSystem() {
       });
     } finally {
       setIsSendingEmail(false);
+    }
+  };
+
+  const handleGenerateInvoice = async () => {
+    if (state.docType !== "Invoice") return;
+
+    setIsGeneratingInvoice(true);
+    try {
+      const { draftId, savedToAdmin } = await finalizeCompletedInvoice(
+        state,
+        currentDraftId
+      );
+      setCurrentDraftId(draftId);
+
+      setToast({
+        message: savedToAdmin
+          ? `Invoice ${state.client.documentNumber} saved to admin`
+          : "Invoice saved locally — cloud sync failed",
+        type: savedToAdmin ? "success" : "error",
+      });
+    } catch {
+      setToast({ message: "Failed to save invoice to admin", type: "error" });
+    } finally {
+      setIsGeneratingInvoice(false);
     }
   };
 
@@ -766,11 +790,6 @@ export default function InvoiceSystem() {
 
         {/* Actions — outside PDF */}
         <div className="action-bar">
-          {!isBlankInvoice && (
-            <Link href="/admin" className="btn-outline">
-              Admin
-            </Link>
-          )}
           <button type="button" onClick={handleClearForm} className="btn-outline">
             Clear
           </button>
@@ -795,6 +814,16 @@ export default function InvoiceSystem() {
           >
             {isSendingEmail ? "Sending…" : "Email"}
           </button>
+          {docType === "Invoice" && (
+            <button
+              type="button"
+              onClick={handleGenerateInvoice}
+              disabled={isGeneratingInvoice}
+              className="btn"
+            >
+              {isGeneratingInvoice ? "Saving…" : "Generate Invoice"}
+            </button>
+          )}
           {docType === "Quote" && (
             <button
               type="button"
