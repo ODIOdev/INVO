@@ -3,8 +3,6 @@ import InvoicePaperHeader from "@/components/InvoicePaperHeader";
 import {
   calculateDraftTotals,
   formatMoney,
-  formatTaxRateDisplay,
-  formatTaxRateLabel,
   type DraftState,
 } from "@/lib/drafts";
 
@@ -54,12 +52,12 @@ export default function InvoiceDocumentPreview({
   state,
   previewId = "invoice-preview",
 }: InvoiceDocumentPreviewProps) {
-  const { docType, taxRate, client, services, laborTitle, laborHours, laborRate, notes } =
+  const { docType, client, services, laborTitle, laborHours, laborRate, notes } =
     state;
   const { serviceSubtotal, laborTotal, subtotal, taxAmount, grandTotal, deposit, balanceDue } =
     calculateDraftTotals(state);
 
-  const taxLabel = formatTaxRateLabel(taxRate);
+  const taxLabel = "Tax";
 
   return (
     <article id={previewId} className="paper">
@@ -98,10 +96,6 @@ export default function InvoiceDocumentPreview({
               <PreviewField
                 label="Due Date"
                 value={formatDisplayDate(client.dueDate)}
-              />
-              <PreviewField
-                label="Tax Rate"
-                value={formatTaxRateDisplay(taxRate)}
               />
             </div>
           </div>

@@ -11,7 +11,6 @@ import {
   createDefaultState,
   calculateDraftTotals,
   formatMoney as money,
-  formatTaxRateLabel,
   generateDocumentNumber,
   getDraft,
   isBlankDraftState,
@@ -706,10 +705,7 @@ export default function InvoiceSystem() {
                   />
                   <SummaryRow label="Labor" value={money(laborTotal)} />
                   <SummaryRow label="Subtotal" value={money(subtotal)} />
-                  <SummaryRow
-                    label={formatTaxRateLabel(taxRate)}
-                    value={money(taxAmount)}
-                  />
+                  <SummaryRow label="Tax" value={money(taxAmount)} />
                   <SummaryRow label="Total" value={money(grandTotal)} />
                   {docType === "Invoice" && (
                     <>

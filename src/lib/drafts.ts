@@ -55,16 +55,6 @@ export function normalizeTaxRate(taxRate: number): TaxRatePercent {
   return 8;
 }
 
-export function formatTaxRateLabel(taxRate: number): string {
-  const normalized = normalizeTaxRate(taxRate);
-  return normalized === 0 ? "Tax" : `Tax (${normalized}%)`;
-}
-
-export function formatTaxRateDisplay(taxRate: number): string {
-  const normalized = normalizeTaxRate(taxRate);
-  return normalized === 0 ? "No tax" : `${normalized}%`;
-}
-
 export function getTodayDate(): string {
   return new Date().toISOString().split("T")[0];
 }
