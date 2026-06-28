@@ -9,10 +9,13 @@ import InvoicePaperHeader from "@/components/InvoicePaperHeader";
 import EmailSetupNotice from "@/components/EmailSetupNotice";
 import {
   createDefaultState,
+  calculateDraftTotals,
   formatMoney as money,
+  formatTaxRateLabel,
   generateDocumentNumber,
   getDraft,
   isBlankDraftState,
+  normalizeTaxRate,
   saveDraftToLibrary,
   type ClientInfo,
   type DocType,
@@ -103,18 +106,14 @@ export default function InvoiceSystem() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const serviceSubtotal = useMemo(() => {
-    return services.reduce(
-      (sum, item) => sum + item.quantity * item.unitPrice,
-      0
-    );
-  }, [services]);
-
-  const laborTotal = laborHours * laborRate;
-  const subtotal = serviceSubtotal + laborTotal;
-  const taxAmount = subtotal * taxRate;
-  const grandTotal = subtotal + taxAmount;
-  const balanceDue = Math.max(0, grandTotal - (deposit ?? 0));
+  const {
+    serviceSubtotal,
+    laborTotal,
+    subtotal,
+    taxAmount,
+    grandTotal,
+    balanceDue,
+  } = useMemo(() => calculateDraftTotals(state), [state]);
   const displayTotal = docType === "Invoice" ? balanceDue : grandTotal;
   const isBlankInvoice = !currentDraftId && isBlankDraftState(state);
 
@@ -458,7 +457,7 @@ export default function InvoiceSystem() {
                   </div>
                   <Field label="Tax Rate">
                     <select
-                      value={taxRate}
+                      value={normalizeTaxRate(taxRate)}
                       onChange={(e) =>
                         setState((prev) => ({
                           ...prev,
@@ -468,9 +467,9 @@ export default function InvoiceSystem() {
                       className="select-field"
                     >
                       <option value={0}>No tax</option>
-                      <option value={0.07}>7%</option>
-                      <option value={0.08}>8%</option>
-                      <option value={0.09}>9%</option>
+                      <option value={7}>7%</option>
+                      <option value={8}>8%</option>
+                      <option value={9}>9%</option>
                     </select>
                   </Field>
                 </div>
@@ -708,11 +707,7 @@ export default function InvoiceSystem() {
                   <SummaryRow label="Labor" value={money(laborTotal)} />
                   <SummaryRow label="Subtotal" value={money(subtotal)} />
                   <SummaryRow
-                    label={
-                      taxRate === 0
-                        ? "Tax"
-                        : `Tax (${(taxRate * 100).toFixed(0)}%)`
-                    }
+                    label={formatTaxRateLabel(taxRate)}
                     value={money(taxAmount)}
                   />
                   <SummaryRow label="Total" value={money(grandTotal)} />

@@ -2,6 +2,8 @@ import jsPDF from "jspdf";
 import {
   calculateDraftTotals,
   formatMoney,
+  formatTaxRateDisplay,
+  formatTaxRateLabel,
   type DraftState,
 } from "@/lib/drafts";
 
@@ -152,10 +154,7 @@ function drawInfoBox(
     [`${state.docType} #`, state.client.documentNumber],
     ["Issued", formatDisplayDate(state.client.issueDate)],
     ["Due", formatDisplayDate(state.client.dueDate)],
-    [
-      "Tax",
-      state.taxRate === 0 ? "None" : `${(state.taxRate * 100).toFixed(0)}%`,
-    ],
+    ["Tax", formatTaxRateDisplay(state.taxRate)],
   ] as const;
 
   let leftH = 4;
@@ -296,10 +295,7 @@ function drawBottomPanels(
   startY: number
 ): number {
   const totals = calculateDraftTotals(state);
-  const taxLabel =
-    state.taxRate === 0
-      ? "Tax"
-      : `Tax (${(state.taxRate * 100).toFixed(0)}%)`;
+  const taxLabel = formatTaxRateLabel(state.taxRate);
 
   const summaryW = 82;
   const summaryX = PAGE_W - MARGIN - summaryW;

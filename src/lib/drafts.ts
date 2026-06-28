@@ -1,5 +1,8 @@
 export type DocType = "Quote" | "Invoice";
 
+/** Tax rate stored as a whole-number percent: 0, 7, 8, or 9 */
+export type TaxRatePercent = 0 | 7 | 8 | 9;
+
 export type ServiceItem = {
   id: number;
   service: string;
@@ -41,6 +44,27 @@ export type SavedDraft = {
 const DRAFTS_KEY = "overdrive-invoice-drafts";
 const LEGACY_DRAFT_KEY = "overdrive-invoice-draft";
 
+export function normalizeTaxRate(taxRate: number): TaxRatePercent {
+  if (!taxRate) return 0;
+  if (taxRate > 0 && taxRate < 1) {
+    const pct = Math.round(taxRate * 100);
+    if (pct === 7 || pct === 8 || pct === 9) return pct;
+    return 8;
+  }
+  if (taxRate === 7 || taxRate === 8 || taxRate === 9) return taxRate;
+  return 8;
+}
+
+export function formatTaxRateLabel(taxRate: number): string {
+  const normalized = normalizeTaxRate(taxRate);
+  return normalized === 0 ? "Tax" : `Tax (${normalized}%)`;
+}
+
+export function formatTaxRateDisplay(taxRate: number): string {
+  const normalized = normalizeTaxRate(taxRate);
+  return normalized === 0 ? "No tax" : `${normalized}%`;
+}
+
 export function getTodayDate(): string {
   return new Date().toISOString().split("T")[0];
 }
@@ -59,7 +83,7 @@ export function generateDocumentNumber(docType: DocType): string {
 export function createDefaultState(docType: DocType = "Quote"): DraftState {
   return {
     docType,
-    taxRate: 0.08,
+    taxRate: 8,
     client: {
       clientName: "",
       companyName: "",
@@ -167,7 +191,8 @@ export function calculateDraftTotals(state: DraftState) {
   );
   const laborTotal = state.laborHours * state.laborRate;
   const subtotal = serviceSubtotal + laborTotal;
-  const taxAmount = subtotal * state.taxRate;
+  const taxPercent = normalizeTaxRate(state.taxRate);
+  const taxAmount = subtotal * (taxPercent / 100);
   const grandTotal = subtotal + taxAmount;
   const deposit = state.deposit ?? 0;
   const balanceDue = Math.max(0, grandTotal - deposit);

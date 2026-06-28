@@ -3,6 +3,8 @@ import InvoicePaperHeader from "@/components/InvoicePaperHeader";
 import {
   calculateDraftTotals,
   formatMoney,
+  formatTaxRateDisplay,
+  formatTaxRateLabel,
   type DraftState,
 } from "@/lib/drafts";
 
@@ -57,8 +59,7 @@ export default function InvoiceDocumentPreview({
   const { serviceSubtotal, laborTotal, subtotal, taxAmount, grandTotal, deposit, balanceDue } =
     calculateDraftTotals(state);
 
-  const taxLabel =
-    taxRate === 0 ? "Tax" : `Tax (${(taxRate * 100).toFixed(0)}%)`;
+  const taxLabel = formatTaxRateLabel(taxRate);
 
   return (
     <article id={previewId} className="paper">
@@ -100,9 +101,7 @@ export default function InvoiceDocumentPreview({
               />
               <PreviewField
                 label="Tax Rate"
-                value={
-                  taxRate === 0 ? "No tax" : `${(taxRate * 100).toFixed(0)}%`
-                }
+                value={formatTaxRateDisplay(taxRate)}
               />
             </div>
           </div>

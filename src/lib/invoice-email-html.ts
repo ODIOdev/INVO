@@ -1,6 +1,8 @@
 import {
   calculateDraftTotals,
   formatMoney,
+  formatTaxRateDisplay,
+  formatTaxRateLabel,
   type DraftState,
 } from "@/lib/drafts";
 
@@ -111,8 +113,7 @@ export function generateInvoiceEmailHtml(
   const { docType, taxRate, client, services, laborTitle, laborHours, laborRate, notes } =
     state;
   const totals = calculateDraftTotals(state);
-  const taxLabel =
-    taxRate === 0 ? "Tax" : `Tax (${(taxRate * 100).toFixed(0)}%)`;
+  const taxLabel = formatTaxRateLabel(taxRate);
   const projectName = (client.projectName ?? "").trim() || "Untitled Project";
   const hasLabor =
     Boolean((laborTitle ?? "").trim()) || laborHours > 0 || laborRate > 0;
@@ -220,7 +221,7 @@ export function generateInvoiceEmailHtml(
                   ${fieldBlock(`${docType} #`, client.documentNumber)}
                   ${fieldBlock("Issued", formatDisplayDate(client.issueDate))}
                   ${fieldBlock("Due", formatDisplayDate(client.dueDate))}
-                  ${fieldBlock("Tax", taxRate === 0 ? "None" : `${(taxRate * 100).toFixed(0)}%`)}
+                  ${fieldBlock("Tax", formatTaxRateDisplay(taxRate))}
                 </table>
               </td>
             </tr>
