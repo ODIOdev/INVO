@@ -8,10 +8,7 @@ import {
   generateInvoicePlainText,
 } from "@/lib/invoice-email-html";
 import { buildInvoicePaymentLink } from "@/lib/stripe-checkout";
-import {
-  generateInvoicePdfBuffer,
-  getInvoicePdfFilename,
-} from "@/lib/invoice-pdf";
+import { createInvoicePdfDownloadUrl } from "@/lib/invoice-pdf-link";
 
 function getPublicAppUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL?.trim()) {
@@ -51,6 +48,7 @@ export async function buildInvoiceEmailBodies(
   html: string;
   plainText: string;
   paymentUrl: string | null;
+  pdfDownloadUrl: string;
   subject: string;
 }> {
   const subject = buildInvoiceEmailSubject(state);
@@ -60,11 +58,16 @@ export async function buildInvoiceEmailBodies(
         ? existingPaymentUrl
         : buildInvoicePaymentLink(state, to)
       : null;
+  const pdfDownloadUrl = await createInvoicePdfDownloadUrl(state);
   const logo = logoUrl ?? getHostedLogoUrl();
-  const html = generateInvoiceEmailHtml(state, { logoUrl: logo, paymentUrl });
-  const plainText = generateInvoicePlainText(state, { paymentUrl });
+  const html = generateInvoiceEmailHtml(state, {
+    logoUrl: logo,
+    paymentUrl,
+    pdfDownloadUrl,
+  });
+  const plainText = generateInvoicePlainText(state, { paymentUrl, pdfDownloadUrl });
 
-  return { html, plainText, paymentUrl, subject };
+  return { html, plainText, paymentUrl, pdfDownloadUrl, subject };
 }
 
 export function hasSmtpConfig(): boolean {
@@ -98,16 +101,6 @@ function isResendTestModeError(message: string): boolean {
     message.includes("only send testing emails") ||
     message.includes("domain is not verified")
   );
-}
-
-async function buildPdfEmailAttachment(state: DraftState): Promise<{
-  filename: string;
-  content: Buffer;
-}> {
-  return {
-    filename: getInvoicePdfFilename(state),
-    content: await generateInvoicePdfBuffer(state),
-  };
 }
 
 export async function sendInvoiceEmail(
@@ -151,7 +144,6 @@ export async function sendInvoiceViaResend(
     to,
     logo ?? getHostedLogoUrl()
   );
-  const pdfAttachment = await buildPdfEmailAttachment(state);
 
   const { error } = await resend.emails.send({
     from: getFromAddress(),
@@ -159,12 +151,6 @@ export async function sendInvoiceViaResend(
     subject,
     html,
     text: plainText,
-    attachments: [
-      {
-        filename: pdfAttachment.filename,
-        content: pdfAttachment.content,
-      },
-    ],
   });
 
   if (error) {
@@ -182,7 +168,6 @@ export async function sendInvoiceViaSmtp(
     to,
     logo ?? getHostedLogoUrl()
   );
-  const pdfAttachment = await buildPdfEmailAttachment(state);
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -200,13 +185,6 @@ export async function sendInvoiceViaSmtp(
     subject,
     html,
     text: plainText,
-    attachments: [
-      {
-        filename: pdfAttachment.filename,
-        content: pdfAttachment.content,
-        contentType: "application/pdf",
-      },
-    ],
     headers: {
       "Color-Scheme": "light",
       "X-Color-Scheme": "light",

@@ -46,6 +46,7 @@ function summaryRow(label: string, value: string, bold = false): string {
 export type InvoiceEmailRenderOptions = {
   logoUrl?: string;
   paymentUrl?: string | null;
+  pdfDownloadUrl?: string | null;
 };
 
 function hrefAttr(url: string): string {
@@ -100,6 +101,32 @@ function paymentCardHtml(
   </table>`;
 }
 
+function pdfDownloadCardHtml(
+  downloadUrl: string,
+  docType: string,
+  docNumber: string
+): string {
+  const safeUrl = hrefAttr(downloadUrl);
+  const label = docType === "Quote" ? "Quote" : "Invoice";
+  return `<table width="100%" cellpadding="0" cellspacing="0" class="email-panel" style="margin:28px 0;border:1px solid #e4e4e7;border-radius:12px;${WHITE_BG}">
+    <tr><td style="padding:24px;text-align:center;${WHITE_BG}">
+      <div class="email-label" style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">Download PDF</div>
+      <div class="email-title" style="font-size:18px;font-weight:600;color:#18181b;line-height:1.3;margin-bottom:6px;">${esc(label)} ${esc(docNumber)}</div>
+      <div class="email-muted" style="font-size:13px;color:#71717a;margin-bottom:20px;">Save or print your ${esc(label.toLowerCase())}</div>
+      <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
+        <tr><td style="background:#18181b;border-radius:8px;padding:14px 36px;">
+          <a href="${safeUrl}" target="_blank" style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;text-decoration:none;display:inline-block;">
+            Download PDF
+          </a>
+        </td></tr>
+      </table>
+      <div style="margin-top:16px;font-size:13px;line-height:1.5;">
+        <a href="${safeUrl}" target="_blank" style="color:#18181b;font-weight:600;text-decoration:underline;">Click here to download</a>
+      </div>
+    </td></tr>
+  </table>`;
+}
+
 export function generateInvoiceEmailHtml(
   state: DraftState,
   options?: InvoiceEmailRenderOptions | string
@@ -108,6 +135,7 @@ export function generateInvoiceEmailHtml(
     typeof options === "string" ? { logoUrl: options } : (options ?? {});
   const logoDataUrl = renderOptions.logoUrl;
   const paymentUrl = renderOptions.paymentUrl ?? null;
+  const pdfDownloadUrl = renderOptions.pdfDownloadUrl ?? null;
   const { docType, client, services, laborTitle, laborHours, laborRate, notes } =
     state;
   const totals = calculateDraftTotals(state);
@@ -166,6 +194,14 @@ export function generateInvoiceEmailHtml(
         )
       : "";
 
+  const pdfDownloadHtml = pdfDownloadUrl
+    ? pdfDownloadCardHtml(
+        pdfDownloadUrl,
+        docType,
+        client.documentNumber || docType
+      )
+    : "";
+
   const notesHtml = (notes ?? "").trim()
     ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
         <tr><td style="border-top:1px solid #f4f4f5;padding-top:24px;">
@@ -199,6 +235,8 @@ export function generateInvoiceEmailHtml(
           <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td style="border-top:1px solid #f4f4f5;"></td></tr></table>
 
           ${paymentHtml}
+
+          ${pdfDownloadHtml}
 
           <table width="100%" cellpadding="0" cellspacing="0" class="email-panel" style="border:1px solid #e4e4e7;border-radius:8px;${WHITE_BG}">
             <tr>
@@ -282,7 +320,7 @@ export function generateInvoiceEmailHtml(
 
 export function generateInvoicePlainText(
   state: DraftState,
-  options?: { paymentUrl?: string | null }
+  options?: { paymentUrl?: string | null; pdfDownloadUrl?: string | null }
 ): string {
   const { docType, client, notes } = state;
   const totals = calculateDraftTotals(state);
@@ -306,13 +344,11 @@ export function generateInvoicePlainText(
     lines.unshift("", `Pay online: ${options.paymentUrl}`, "");
   }
 
-  lines.push(
-    "",
-    `A PDF copy of this ${docType.toLowerCase()} is attached.`,
-    "",
-    "— Over Drive OS",
-    "www.overdriveio.com"
-  );
+  if (options?.pdfDownloadUrl) {
+    lines.push("", `Download PDF: ${options.pdfDownloadUrl}`);
+  }
+
+  lines.push("", "— Over Drive OS", "www.overdriveio.com");
 
   return lines.filter(Boolean).join("\n");
 }
