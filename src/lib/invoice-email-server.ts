@@ -7,7 +7,7 @@ import {
   generateInvoiceEmailHtml,
   generateInvoicePlainText,
 } from "@/lib/invoice-email-html";
-import { createInvoicePaymentUrl } from "@/lib/stripe-checkout";
+import { buildInvoicePaymentLink } from "@/lib/stripe-checkout";
 
 function getPublicAppUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL?.trim()) {
@@ -53,7 +53,7 @@ export async function buildInvoiceEmailBodies(
   const paymentUrl =
     existingPaymentUrl !== undefined
       ? existingPaymentUrl
-      : await createInvoicePaymentUrl(state, to).catch(() => null);
+      : buildInvoicePaymentLink(state, to);
   const logo = logoUrl ?? getHostedLogoUrl();
   const html = generateInvoiceEmailHtml(state, { logoUrl: logo, paymentUrl });
   const plainText = generateInvoicePlainText(state, { paymentUrl });

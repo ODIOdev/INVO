@@ -48,20 +48,32 @@ export type InvoiceEmailRenderOptions = {
   paymentUrl?: string | null;
 };
 
+function hrefAttr(url: string): string {
+  return url.replace(/"/g, "&quot;");
+}
+
 function paymentCardHtml(
   paymentUrl: string,
   amountLabel: string,
   dueDateLabel: string
 ): string {
-  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;border:1px solid #e0e7ff;border-radius:12px;background:#f8f7ff;overflow:hidden;">
+  const safeUrl = hrefAttr(paymentUrl);
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;border:2px solid #635bff;border-radius:12px;background:#f8f7ff;">
     <tr><td style="padding:28px 24px;text-align:center;">
-      <div style="font-size:11px;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">Amount Due</div>
+      <div style="font-size:11px;font-weight:600;color:#635bff;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">Amount Due</div>
       <div style="font-size:32px;font-weight:700;color:#18181b;line-height:1.2;margin-bottom:6px;">${esc(amountLabel)}</div>
       <div style="font-size:13px;color:#71717a;margin-bottom:22px;">Due ${esc(dueDateLabel)}</div>
-      <a href="${esc(paymentUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#635bff;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;text-decoration:none;padding:16px 40px;border-radius:8px;box-shadow:0 2px 8px rgba(99,91,255,0.35);">
-        Pay with Stripe
-      </a>
-      <div style="margin-top:16px;font-size:12px;color:#71717a;line-height:1.5;">
+      <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
+        <tr><td style="background:#635bff;border-radius:8px;padding:16px 40px;">
+          <a href="${safeUrl}" target="_blank" style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">
+            Pay with Stripe
+          </a>
+        </td></tr>
+      </table>
+      <div style="margin-top:18px;font-size:13px;line-height:1.5;">
+        <a href="${safeUrl}" target="_blank" style="color:#635bff;font-weight:600;text-decoration:underline;">Click here to pay online</a>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#71717a;line-height:1.5;">
         Secure Stripe checkout · Card, Apple Pay, Google Pay
       </div>
     </td></tr>
@@ -160,6 +172,8 @@ export function generateInvoiceEmailHtml(
 
           <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td style="border-top:1px solid #f4f4f5;"></td></tr></table>
 
+          ${paymentHtml}
+
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e4e4e7;border-radius:8px;background:#fcfcfc;">
             <tr>
               <td width="50%" valign="top" style="padding:16px 20px;border-right:1px solid #e4e4e7;">
@@ -226,8 +240,6 @@ export function generateInvoiceEmailHtml(
             </tr>
           </table>
 
-          ${paymentHtml}
-
           ${notesHtml}
 
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
@@ -258,7 +270,7 @@ export function generateInvoicePlainText(
   ];
 
   if (options?.paymentUrl && totals.balanceDue >= 0.5) {
-    lines.push("", `Pay online: ${options.paymentUrl}`);
+    lines.unshift("", `Pay online: ${options.paymentUrl}`, "");
   }
 
   lines.push("", "— Over Drive OS", "www.overdriveio.com");
@@ -269,7 +281,7 @@ export function generateInvoicePlainText(
 export async function sendInvoiceEmail(
   state: DraftState,
   recipient: string
-): Promise<{ to: string; subject: string }> {
+): Promise<{ to: string; subject: string; paymentIncluded: boolean }> {
   const to = recipient.trim();
   if (!to) {
     throw new Error("Enter a client email address to send the invoice.");
@@ -285,6 +297,7 @@ export async function sendInvoiceEmail(
     error?: string;
     to?: string;
     subject?: string;
+    paymentIncluded?: boolean;
   };
 
   if (!response.ok) {
@@ -294,6 +307,7 @@ export async function sendInvoiceEmail(
   return {
     to: data.to ?? to,
     subject: data.subject ?? buildLocalEmailSubject(state),
+    paymentIncluded: Boolean(data.paymentIncluded),
   };
 }
 

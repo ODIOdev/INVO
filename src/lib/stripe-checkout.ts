@@ -69,3 +69,27 @@ export async function createInvoicePaymentUrl(
 
   return session.url ?? null;
 }
+
+export function buildInvoicePaymentLink(
+  state: DraftState,
+  customerEmail: string
+): string | null {
+  if (!hasStripeConfig()) return null;
+
+  const totals = calculateDraftTotals(state);
+  if (totals.balanceDue < 0.5) return null;
+
+  const { client, docType } = state;
+  const to = customerEmail.trim() || (client.email ?? "").trim();
+  if (!to) return null;
+
+  const params = new URLSearchParams({
+    to,
+    amount: String(totals.balanceDue),
+    doc: client.documentNumber || "Invoice",
+    project: (client.projectName ?? "").trim() || "Over Drive OS",
+    docType,
+  });
+
+  return `${getPublicAppUrl()}/api/stripe/pay?${params.toString()}`;
+}

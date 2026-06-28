@@ -33,7 +33,13 @@ export async function POST(request: Request) {
 
   try {
     await sendInvoiceEmailServer(state, to);
-    return NextResponse.json({ to, subject });
+    const { buildInvoicePaymentLink } = await import("@/lib/stripe-checkout");
+    const paymentUrl = buildInvoicePaymentLink(state, to);
+    return NextResponse.json({
+      to,
+      subject,
+      paymentIncluded: Boolean(paymentUrl),
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to send email";

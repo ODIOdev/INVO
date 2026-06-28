@@ -246,7 +246,9 @@ export default function InvoiceSystem() {
     try {
       const result = await sendInvoiceEmail(state, recipient);
       setToast({
-        message: `Invoice emailed to ${result.to} with payment link`,
+        message: result.paymentIncluded
+          ? `Invoice emailed to ${result.to} with Stripe payment link`
+          : `Invoice emailed to ${result.to} (add line items so total is at least $0.50 for payment link)`,
         type: "success",
       });
     } catch (error) {
