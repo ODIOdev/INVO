@@ -88,6 +88,41 @@ export function createDefaultState(docType: DocType = "Quote"): DraftState {
   };
 }
 
+export function createDemoDraftState(docType: DocType = "Quote"): DraftState {
+  const state = createDefaultState(docType);
+  state.client = {
+    ...state.client,
+    clientName: "Demo Client",
+    companyName: "Demo Company LLC",
+    email: "demo@overdrive.io",
+    phone: "(555) 123-4567",
+    url: "www.demo.overdrive.io",
+    projectName: "Demo Storage Project",
+  };
+  state.services = [
+    {
+      id: 1,
+      service: "Consulting",
+      description: "Strategy and planning session",
+      quantity: 4,
+      unitPrice: 125,
+    },
+    {
+      id: 2,
+      service: "Implementation",
+      description: "Setup and configuration",
+      quantity: 2,
+      unitPrice: 200,
+    },
+  ];
+  state.laborTitle = "On-site support";
+  state.laborHours = 6;
+  state.laborRate = 85;
+  state.deposit = 250;
+  state.notes = "Demo record — payment due within 30 days of invoice date.";
+  return state;
+}
+
 export function calculateGrandTotal(state: DraftState): number {
   return calculateDraftTotals(state).grandTotal;
 }
@@ -199,6 +234,10 @@ export function saveDraftToLibrary(
 
 export function deleteDraft(id: string): void {
   writeDrafts(readDrafts().filter((d) => d.id !== id));
+}
+
+export function clearAllDrafts(): void {
+  writeDrafts([]);
 }
 
 export function formatSavedDate(iso: string): string {

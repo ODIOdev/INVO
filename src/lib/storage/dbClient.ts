@@ -285,6 +285,54 @@ export async function deleteStoredRecord(id: string) {
   return response.json();
 }
 
+export async function upsertStorageRecord(input: {
+  binId: DataBinId;
+  data: Record<string, unknown>;
+  id?: string;
+  label?: string;
+  source?: StoredRecord["source"];
+}) {
+  const response = await fetch("/api/storage/records", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error("Failed to save record");
+  return response.json() as Promise<{ record: StoredRecord }>;
+}
+
+export async function seedDemoDatabase(): Promise<SyncResult> {
+  const { createDemoDraftState } = await import("@/lib/drafts");
+  const demoId = crypto.randomUUID();
+  const state = createDemoDraftState("Quote");
+
+  return syncToInternalDatabase({
+    document: { ...state, draftId: demoId },
+    source: "admin-demo",
+  });
+}
+
+export async function fetchStorageStatus(): Promise<{
+  backend: "redis" | "local";
+  cloud: boolean;
+}> {
+  const response = await fetch("/api/storage/status", { cache: "no-store" });
+  if (!response.ok) throw new Error("Failed to load storage status");
+  return response.json();
+}
+
+export async function masterResetDatabase(): Promise<void> {
+  const response = await fetch("/api/storage/reset", { method: "POST" });
+  if (!response.ok) throw new Error("Failed to reset database");
+
+  const { clearAllDrafts } = await import("@/lib/drafts");
+  clearAllDrafts();
+
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem("overdrive-open-submission");
+  }
+}
+
 export async function deleteDraftEverywhere(id: string): Promise<void> {
   const { deleteDraft } = await import("@/lib/drafts");
   deleteDraft(id);

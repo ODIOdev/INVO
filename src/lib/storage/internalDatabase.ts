@@ -111,6 +111,10 @@ export async function clearBin(binId: DataBinId): Promise<number> {
   return removed;
 }
 
+export async function resetDatabase(): Promise<void> {
+  await writeDatabase(emptyDatabase());
+}
+
 export async function bulkUpsertRecords(
   records: Array<{
     id?: string;

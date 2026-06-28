@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import InvoicePaperFooter from "@/components/InvoicePaperFooter";
@@ -710,6 +711,9 @@ export default function InvoiceSystem() {
 
         {/* Actions — outside PDF */}
         <div className="action-bar">
+          <Link href="/admin" className="btn-outline">
+            Admin
+          </Link>
           <button type="button" onClick={handleClearForm} className="btn-outline">
             Clear
           </button>

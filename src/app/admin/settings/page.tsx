@@ -1,0 +1,22 @@
+import AdminSettingsPanel from "@/components/admin/AdminSettingsPanel";
+import {
+  getDatabaseStats,
+  getStorageBackend,
+} from "@/lib/storage/internalDatabase";
+
+export const metadata = {
+  title: "Admin Settings | Over Drive OS",
+  description: "Admin settings and database controls",
+};
+
+export default async function AdminSettingsPage() {
+  const stats = await getDatabaseStats();
+  const totalRecords = stats.bins.reduce((sum, bin) => sum + bin.count, 0);
+
+  return (
+    <AdminSettingsPanel
+      backend={getStorageBackend()}
+      totalRecords={totalRecords}
+    />
+  );
+}

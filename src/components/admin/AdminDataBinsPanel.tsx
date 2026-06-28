@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
+import AdminDemoForm from "@/components/admin/AdminDemoForm";
 import {
   DATA_BINS,
   type BinSummary,
@@ -25,6 +26,7 @@ type AdminDataBinsPanelProps = {
   };
   initialRecords: StoredRecord[];
   initialBin?: DataBinId;
+  storageBackend: "redis" | "local";
 };
 
 export default function AdminDataBinsPanel({
@@ -32,6 +34,7 @@ export default function AdminDataBinsPanel({
   initialStats,
   initialRecords,
   initialBin = "clients",
+  storageBackend,
 }: AdminDataBinsPanelProps) {
   const router = useRouter();
   const [bins, setBins] = useState<BinSummary[]>(initialBins);
@@ -39,6 +42,9 @@ export default function AdminDataBinsPanel({
   const [records, setRecords] = useState<StoredRecord[]>(initialRecords);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [totalRecords, setTotalRecords] = useState(initialStats.totalRecords);
+  const [totalBinRecords, setTotalBinRecords] = useState(
+    initialBins.reduce((sum, bin) => sum + bin.count, 0)
+  );
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(
     initialStats.lastSyncedAt
   );
@@ -51,6 +57,9 @@ export default function AdminDataBinsPanel({
     const data = await fetchBinSummaries();
     setBins(data.bins);
     setTotalRecords(data.stats.totalRecords);
+    setTotalBinRecords(
+      data.bins.reduce((sum: number, bin: BinSummary) => sum + bin.count, 0)
+    );
     setLastSyncedAt(data.stats.lastSyncedAt);
   }, []);
 
@@ -134,8 +143,11 @@ export default function AdminDataBinsPanel({
               Over Drive OS Admin
             </p>
             <h1 className="text-lg font-semibold text-zinc-900">
-              Internal Data Bins
+              Internal Database
             </h1>
+            <p className="mt-0.5 text-sm text-zinc-500">
+              Data bins for clients, documents, drafts, and more
+            </p>
           </div>
           <nav className="flex flex-wrap items-center gap-2">
             <Link href="/" className="btn-outline text-xs">
@@ -143,6 +155,9 @@ export default function AdminDataBinsPanel({
             </Link>
             <Link href="/invoice" className="btn-outline text-xs">
               Invoice App
+            </Link>
+            <Link href="/admin/settings" className="btn-outline text-xs">
+              Settings
             </Link>
             <button
               type="button"
@@ -165,12 +180,22 @@ export default function AdminDataBinsPanel({
             </p>
             <p className="mt-1 text-2xl font-bold text-zinc-900">{totalRecords}</p>
             <p className="text-xs text-zinc-500">quotes & invoices</p>
+            <p className="mt-2 text-xs text-zinc-500">
+              {totalBinRecords} total records across all bins
+            </p>
+            <p className="mt-2 text-[11px] font-medium text-zinc-500">
+              {storageBackend === "redis"
+                ? "☁️ Vercel Cloud (Redis)"
+                : "💾 Local storage"}
+            </p>
             {lastSyncedAt && (
               <p className="mt-2 text-[11px] text-zinc-400">
                 Last sync: {new Date(lastSyncedAt).toLocaleString()}
               </p>
             )}
           </div>
+
+          <AdminDemoForm selectedBin={selectedBin} onSaved={refresh} />
 
           <ul className="space-y-1">
             {bins.map((bin) => (
@@ -224,7 +249,8 @@ export default function AdminDataBinsPanel({
               <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-6 py-12 text-center">
                 <p className="text-sm font-medium text-zinc-700">Bin is empty</p>
                 <p className="mt-1 text-sm text-zinc-500">
-                  Save data from the invoice app to populate this bin.
+                  Save data from the invoice app or use the demo form to add
+                  records.
                 </p>
               </div>
             ) : (

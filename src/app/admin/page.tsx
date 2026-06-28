@@ -3,6 +3,7 @@ import {
   getBinSummaries,
   getDatabaseStats,
   getRecordsByBin,
+  getStorageBackend,
 } from "@/lib/storage/internalDatabase";
 
 export const metadata = {
@@ -23,6 +24,7 @@ export default async function AdminPage() {
       initialStats={stats}
       initialRecords={initialRecords}
       initialBin="clients"
+      storageBackend={getStorageBackend()}
     />
   );
 }
