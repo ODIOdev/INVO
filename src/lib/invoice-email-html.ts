@@ -236,8 +236,6 @@ export function generateInvoiceEmailHtml(
 
           ${paymentHtml}
 
-          ${pdfDownloadHtml}
-
           <table width="100%" cellpadding="0" cellspacing="0" class="email-panel" style="border:1px solid #e4e4e7;border-radius:8px;${WHITE_BG}">
             <tr>
               <td width="50%" valign="top" class="email-bg" style="padding:16px 20px;border-right:1px solid #e4e4e7;${WHITE_BG}">
@@ -304,6 +302,8 @@ export function generateInvoiceEmailHtml(
           </table>
 
           ${notesHtml}
+
+          ${pdfDownloadHtml}
 
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
             <tr><td align="center" class="email-footer" style="font-size:11px;font-weight:500;color:#a1a1aa;letter-spacing:0.04em;">www.overdriveio.com</td></tr>
