@@ -106,10 +106,11 @@ export default function AdminSettingsPanel({
         <section className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-zinc-900">Email</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Sends the full HTML invoice with Stripe pay button directly to your
-            client&apos;s inbox.
+            Sends HTML invoices from{" "}
+            <span className="font-mono">admin@overdriveio.com</span> via
+            Hostinger SMTP (recommended) or Resend.
           </p>
-          <dl className="mt-4">
+          <dl className="mt-4 space-y-3">
             <div className="rounded-md bg-zinc-50 px-4 py-3">
               <dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">
                 Delivery
@@ -119,22 +120,24 @@ export default function AdminSettingsPanel({
                   ? `Connected (${emailProvider})`
                   : "Not configured"}
               </dd>
-              {!emailConfigured && (
-                <p className="mt-2 text-xs text-zinc-500">
-                  Fastest setup:{" "}
-                  <a
-                    href="https://vercel.com/integrations/resend"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-semibold text-zinc-700 underline"
-                  >
-                    Install Resend on Vercel
-                  </a>{" "}
-                  (auto-adds <span className="font-mono">RESEND_API_KEY</span>
-                  ). Or add it manually in Vercel env vars with{" "}
-                  <span className="font-mono">EMAIL_FROM</span>.
-                </p>
-              )}
+            </div>
+            <div className="rounded-md border border-zinc-200 bg-white px-4 py-3 text-xs text-zinc-600">
+              <p className="font-semibold text-zinc-800">
+                Hostinger SMTP (send to any client)
+              </p>
+              <p className="mt-2">
+                Add these in Vercel environment variables:
+              </p>
+              <ul className="mt-2 space-y-1 font-mono text-[11px] text-zinc-700">
+                <li>SMTP_HOST=smtp.hostinger.com</li>
+                <li>SMTP_PORT=465</li>
+                <li>SMTP_SECURE=true</li>
+                <li>SMTP_USER=admin@overdriveio.com</li>
+                <li>SMTP_PASS=your email password</li>
+                <li>
+                  EMAIL_FROM=Over Drive OS &lt;admin@overdriveio.com&gt;
+                </li>
+              </ul>
             </div>
           </dl>
         </section>

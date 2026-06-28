@@ -61,46 +61,6 @@ export async function buildInvoiceEmailBodies(
   return { html, plainText, paymentUrl, subject };
 }
 
-function foldBase64(input: string): string {
-  return input.replace(/.{1,76}/g, "$&\r\n").trim();
-}
-
-function encodeBase64Utf8(value: string): string {
-  return Buffer.from(value, "utf-8").toString("base64");
-}
-
-export function buildInvoiceEml(options: {
-  to?: string;
-  subject: string;
-  html: string;
-  plainText: string;
-}): string {
-  const boundary = `----=_Invoice_${Date.now()}`;
-  const toLine = options.to?.trim() ? `To: ${options.to.trim()}\r\n` : "";
-  const htmlBase64 = foldBase64(encodeBase64Utf8(options.html));
-
-  return [
-    toLine + `Subject: ${options.subject}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit",
-    "",
-    options.plainText,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/html; charset=UTF-8",
-    "Content-Transfer-Encoding: base64",
-    "",
-    htmlBase64,
-    "",
-    `--${boundary}--`,
-    "",
-  ].join("\r\n");
-}
-
 export function hasSmtpConfig(): boolean {
   return Boolean(
     process.env.SMTP_HOST &&
@@ -113,11 +73,54 @@ export function hasResendConfig(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
 }
 
+export function hasEmailConfig(): boolean {
+  return hasSmtpConfig() || hasResendConfig();
+}
+
 function getFromAddress(): string {
   return (
     process.env.EMAIL_FROM?.trim() ||
-    process.env.SMTP_USER?.trim() ||
-    "Over Drive OS <onboarding@resend.dev>"
+    (process.env.SMTP_USER?.trim()
+      ? `Over Drive OS <${process.env.SMTP_USER.trim()}>`
+      : "") ||
+    "Over Drive OS <admin@overdriveio.com>"
+  );
+}
+
+function isResendTestModeError(message: string): boolean {
+  return (
+    message.includes("only send testing emails") ||
+    message.includes("domain is not verified")
+  );
+}
+
+export async function sendInvoiceEmail(
+  state: DraftState,
+  to: string
+): Promise<void> {
+  if (hasSmtpConfig()) {
+    await sendInvoiceViaSmtp(state, to);
+    return;
+  }
+
+  if (hasResendConfig()) {
+    try {
+      await sendInvoiceViaResend(state, to);
+      return;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to send email";
+      if (isResendTestModeError(message)) {
+        throw new Error(
+          "Email is in Resend test mode. Add Hostinger SMTP credentials (SMTP_PASS for admin@overdriveio.com) in Vercel, or verify overdriveio.com at resend.com/domains."
+        );
+      }
+      throw error;
+    }
+  }
+
+  throw new Error(
+    "Email is not configured. Add Hostinger SMTP credentials for admin@overdriveio.com in Vercel environment variables."
   );
 }
 
@@ -174,19 +177,4 @@ export async function sendInvoiceViaSmtp(
     html,
     text: plainText,
   });
-}
-
-export async function buildInvoiceEmlForCompose(
-  state: DraftState,
-  to: string,
-  existingPaymentUrl?: string | null
-): Promise<string> {
-  const { html, plainText, subject } = await buildInvoiceEmailBodies(
-    state,
-    to,
-    undefined,
-    existingPaymentUrl
-  );
-
-  return buildInvoiceEml({ to, subject, html, plainText });
 }

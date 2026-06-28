@@ -48,15 +48,22 @@ export type InvoiceEmailRenderOptions = {
   paymentUrl?: string | null;
 };
 
-function paymentButtonHtml(paymentUrl: string, amountLabel: string): string {
-  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
-    <tr><td align="center" style="padding:8px 0 4px;">
-      <a href="${esc(paymentUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#635bff;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:8px;letter-spacing:0.01em;">
-        Pay ${esc(amountLabel)} Securely
+function paymentCardHtml(
+  paymentUrl: string,
+  amountLabel: string,
+  dueDateLabel: string
+): string {
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;border:1px solid #e0e7ff;border-radius:12px;background:#f8f7ff;overflow:hidden;">
+    <tr><td style="padding:28px 24px;text-align:center;">
+      <div style="font-size:11px;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">Amount Due</div>
+      <div style="font-size:32px;font-weight:700;color:#18181b;line-height:1.2;margin-bottom:6px;">${esc(amountLabel)}</div>
+      <div style="font-size:13px;color:#71717a;margin-bottom:22px;">Due ${esc(dueDateLabel)}</div>
+      <a href="${esc(paymentUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#635bff;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;text-decoration:none;padding:16px 40px;border-radius:8px;box-shadow:0 2px 8px rgba(99,91,255,0.35);">
+        Pay with Stripe
       </a>
-    </td></tr>
-    <tr><td align="center" style="padding-top:8px;font-size:12px;color:#71717a;">
-      Secure payment powered by Stripe
+      <div style="margin-top:16px;font-size:12px;color:#71717a;line-height:1.5;">
+        Secure Stripe checkout · Card, Apple Pay, Google Pay
+      </div>
     </td></tr>
   </table>`;
 }
@@ -125,7 +132,11 @@ export function generateInvoiceEmailHtml(
 
   const paymentHtml =
     paymentUrl && totals.balanceDue >= 0.5
-      ? paymentButtonHtml(paymentUrl, moneyForEmail(totals.balanceDue))
+      ? paymentCardHtml(
+          paymentUrl,
+          moneyForEmail(totals.balanceDue),
+          formatDisplayDate(client.dueDate)
+        )
       : "";
 
   return `<!DOCTYPE html>
@@ -258,143 +269,35 @@ export function generateInvoicePlainText(
 export async function sendInvoiceEmail(
   state: DraftState,
   recipient: string
-): Promise<{ to: string; subject: string; mode: "sent" | "compose" }> {
+): Promise<{ to: string; subject: string }> {
   const to = recipient.trim();
   if (!to) {
     throw new Error("Enter a client email address to send the invoice.");
   }
 
-  const subject = buildLocalEmailSubject(state);
-
-  let response: Response;
-  try {
-    response = await fetch("/api/email/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ state, to }),
-    });
-  } catch {
-    openMailtoCompose(to, subject, generateInvoicePlainText(state));
-    return { to, subject, mode: "compose" };
-  }
+  const response = await fetch("/api/email/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state, to }),
+  });
 
   const data = (await response.json().catch(() => ({}))) as {
     error?: string;
     to?: string;
     subject?: string;
-    mode?: "sent" | "compose";
-    paymentUrl?: string | null;
   };
 
   if (!response.ok) {
-    openMailtoCompose(
-      to,
-      subject,
-      generateInvoicePlainText(state)
-    );
-    return { to, subject, mode: "compose" };
-  }
-
-  if (data.mode === "compose") {
-    const composeSubject = data.subject ?? subject;
-    await deliverEmlToMailApp(
-      state,
-      to,
-      composeSubject,
-      data.paymentUrl ?? null
-    );
-    return {
-      to: data.to ?? to,
-      subject: composeSubject,
-      mode: "compose",
-    };
+    throw new Error(data.error || "Failed to send email");
   }
 
   return {
     to: data.to ?? to,
-    subject: data.subject ?? subject,
-    mode: "sent",
+    subject: data.subject ?? buildLocalEmailSubject(state),
   };
 }
 
 function buildLocalEmailSubject(state: DraftState): string {
   const project = (state.client.projectName ?? "").trim() || "Over Drive OS";
   return `${state.docType} ${state.client.documentNumber} — ${project}`;
-}
-
-function openMailtoCompose(to: string, subject: string, body: string): void {
-  const params = new URLSearchParams({
-    subject,
-    body,
-  });
-  window.location.href = `mailto:${encodeURIComponent(to)}?${params.toString()}`;
-}
-
-async function deliverEmlToMailApp(
-  state: DraftState,
-  to: string,
-  subject: string,
-  paymentUrl: string | null = null
-): Promise<void> {
-  const plainTextOptions = { paymentUrl };
-
-  let response: Response;
-  try {
-    response = await fetch("/api/email/compose", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ state, to, paymentUrl }),
-    });
-  } catch {
-    openMailtoCompose(to, subject, generateInvoicePlainText(state, plainTextOptions));
-    return;
-  }
-
-  if (!response.ok) {
-    openMailtoCompose(to, subject, generateInvoicePlainText(state, plainTextOptions));
-    return;
-  }
-
-  const blob = await response.blob();
-  const filename = emlDownloadFilename(subject);
-  const file = new File([blob], filename, { type: "message/rfc822" });
-
-  if (typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: subject,
-        text: `Invoice for ${to}`,
-      });
-      return;
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return;
-      }
-    }
-  }
-
-  openMailtoCompose(to, subject, generateInvoicePlainText(state, plainTextOptions));
-  downloadEmlBlob(blob, filename);
-}
-
-function emlDownloadFilename(subject: string): string {
-  const safe = subject
-    .replace(/[^\w\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .slice(0, 80);
-  return `${safe || "invoice"}.eml`;
-}
-
-function downloadEmlBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

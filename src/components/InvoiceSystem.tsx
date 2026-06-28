@@ -81,6 +81,9 @@ export default function InvoiceSystem() {
   const [isConverting, setIsConverting] = useState(false);
   const [showExitPrompt, setShowExitPrompt] = useState(false);
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null);
+  const [emailProductionReady, setEmailProductionReady] = useState<boolean | null>(
+    null
+  );
 
   const {
     docType,
@@ -205,10 +208,19 @@ export default function InvoiceSystem() {
   useEffect(() => {
     fetch("/api/email/status", { cache: "no-store" })
       .then((response) => response.json())
-      .then((data: { configured?: boolean }) =>
-        setEmailConfigured(Boolean(data.configured))
+      .then(
+        (data: {
+          configured?: boolean;
+          productionReady?: boolean;
+        }) => {
+          setEmailConfigured(Boolean(data.configured));
+          setEmailProductionReady(Boolean(data.productionReady));
+        }
       )
-      .catch(() => setEmailConfigured(false));
+      .catch(() => {
+        setEmailConfigured(false);
+        setEmailProductionReady(false);
+      });
   }, []);
 
   const handleSend = async () => {
@@ -221,10 +233,10 @@ export default function InvoiceSystem() {
       return;
     }
 
-    if (emailConfigured === false) {
+    if (emailProductionReady === false) {
       setToast({
         message:
-          "Connect Resend first — follow the setup steps in the yellow banner above",
+          "Add SMTP_PASS for admin@overdriveio.com in Vercel — see the setup banner below",
         type: "error",
       });
       return;
@@ -741,7 +753,7 @@ export default function InvoiceSystem() {
           </div>
         </article>
 
-        {emailConfigured === false && (
+        {emailProductionReady === false && (
           <div className="mx-auto mt-4 max-w-[816px]">
             <EmailSetupNotice />
           </div>

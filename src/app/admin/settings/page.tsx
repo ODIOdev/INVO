@@ -1,4 +1,9 @@
 import AdminSettingsPanel from "@/components/admin/AdminSettingsPanel";
+import {
+  hasEmailConfig,
+  hasResendConfig,
+  hasSmtpConfig,
+} from "@/lib/invoice-email-server";
 import { hasStripeConfig } from "@/lib/stripe-checkout";
 import {
   getDatabaseStats,
@@ -19,6 +24,10 @@ export default async function AdminSettingsPage() {
       backend={getStorageBackend()}
       totalRecords={totalRecords}
       stripeConfigured={hasStripeConfig()}
+      emailConfigured={hasEmailConfig()}
+      emailProvider={
+        hasResendConfig() ? "Resend" : hasSmtpConfig() ? "SMTP" : null
+      }
     />
   );
 }
