@@ -8,7 +8,7 @@ import {
   generateInvoicePlainText,
 } from "@/lib/invoice-email-html";
 import { buildInvoicePaymentLink } from "@/lib/stripe-checkout";
-import { createInvoicePdfDownloadUrl } from "@/lib/invoice-pdf-link";
+import { createInvoicePdfDownloadUrl, getPdfDownloadButtonImageUrl } from "@/lib/invoice-pdf-link";
 
 function getPublicAppUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL?.trim()) {
@@ -59,11 +59,13 @@ export async function buildInvoiceEmailBodies(
         : buildInvoicePaymentLink(state, to)
       : null;
   const pdfDownloadUrl = await createInvoicePdfDownloadUrl(state);
+  const pdfDownloadButtonImageUrl = getPdfDownloadButtonImageUrl();
   const logo = logoUrl ?? getHostedLogoUrl();
   const html = generateInvoiceEmailHtml(state, {
     logoUrl: logo,
     paymentUrl,
     pdfDownloadUrl,
+    pdfDownloadButtonImageUrl,
   });
   const plainText = generateInvoicePlainText(state, { paymentUrl, pdfDownloadUrl });
 

@@ -47,6 +47,7 @@ export type InvoiceEmailRenderOptions = {
   logoUrl?: string;
   paymentUrl?: string | null;
   pdfDownloadUrl?: string | null;
+  pdfDownloadButtonImageUrl?: string | null;
 };
 
 function hrefAttr(url: string): string {
@@ -103,10 +104,12 @@ function paymentCardHtml(
 
 function pdfDownloadCardHtml(
   downloadUrl: string,
+  buttonImageUrl: string,
   docType: string,
   docNumber: string
 ): string {
   const safeUrl = hrefAttr(downloadUrl);
+  const safeImageUrl = hrefAttr(buttonImageUrl);
   const label = docType === "Quote" ? "Quote" : "Invoice";
   return `<table width="100%" cellpadding="0" cellspacing="0" class="email-panel" style="margin:28px 0;border:1px solid #e4e4e7;border-radius:12px;${WHITE_BG}">
     <tr><td style="padding:24px;text-align:center;${WHITE_BG}">
@@ -115,9 +118,9 @@ function pdfDownloadCardHtml(
       <div class="email-muted" style="font-size:13px;color:#71717a;margin-bottom:20px;">Save or print your ${esc(label.toLowerCase())}</div>
       <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;border-collapse:separate;">
         <tr>
-          <td align="center" bgcolor="#18181b" style="background:#18181b;border-radius:8px;mso-padding-alt:14px 36px;">
-            <a href="${safeUrl}" style="display:block;padding:14px 36px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;text-decoration:none;border:0;outline:none;line-height:1.2;">
-              Download PDF
+          <td align="center" style="line-height:0;font-size:0;">
+            <a href="${safeUrl}" style="border:0;text-decoration:none;display:inline-block;line-height:0;">
+              <img src="${safeImageUrl}" alt="Download PDF" width="360" height="52" border="0" style="display:block;border:0;outline:none;text-decoration:none;margin:0 auto;" />
             </a>
           </td>
         </tr>
@@ -135,6 +138,7 @@ export function generateInvoiceEmailHtml(
   const logoDataUrl = renderOptions.logoUrl;
   const paymentUrl = renderOptions.paymentUrl ?? null;
   const pdfDownloadUrl = renderOptions.pdfDownloadUrl ?? null;
+  const pdfDownloadButtonImageUrl = renderOptions.pdfDownloadButtonImageUrl ?? null;
   const { docType, client, services, laborTitle, laborHours, laborRate, notes } =
     state;
   const totals = calculateDraftTotals(state);
@@ -193,13 +197,15 @@ export function generateInvoiceEmailHtml(
         )
       : "";
 
-  const pdfDownloadHtml = pdfDownloadUrl
-    ? pdfDownloadCardHtml(
-        pdfDownloadUrl,
-        docType,
-        client.documentNumber || docType
-      )
-    : "";
+  const pdfDownloadHtml =
+    pdfDownloadUrl && pdfDownloadButtonImageUrl
+      ? pdfDownloadCardHtml(
+          pdfDownloadUrl,
+          pdfDownloadButtonImageUrl,
+          docType,
+          client.documentNumber || docType
+        )
+      : "";
 
   const notesHtml = (notes ?? "").trim()
     ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">

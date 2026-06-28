@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { Redis } from "@upstash/redis";
 import type { DraftState } from "@/lib/drafts";
+import { getInvoicePdfFilename } from "@/lib/invoice-pdf";
 
 const REDIS_PREFIX = "overdrive:pdf-download:";
 const TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -109,5 +110,10 @@ export async function createInvoicePdfDownloadUrl(
 ): Promise<string> {
   const token = randomUUID();
   await storePdfDownloadToken(token, state);
-  return `${getPublicAppUrl()}/api/invoice/pdf?token=${encodeURIComponent(token)}&dl=1`;
+  const filename = encodeURIComponent(getInvoicePdfFilename(state));
+  return `${getPublicAppUrl()}/api/download/${encodeURIComponent(token)}/${filename}`;
+}
+
+export function getPdfDownloadButtonImageUrl(): string {
+  return `${getPublicAppUrl()}/email/download-pdf-button.png`;
 }
