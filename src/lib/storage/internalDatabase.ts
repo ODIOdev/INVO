@@ -115,6 +115,52 @@ export async function resetDatabase(): Promise<void> {
   await writeDatabase(emptyDatabase());
 }
 
+function recordBelongsToDocument(record: StoredRecord, docId: string): boolean {
+  if (
+    record.id === `draft-${docId}` ||
+    record.id === `doc-${docId}` ||
+    record.id === `client-${docId}` ||
+    record.id === `labor-${docId}` ||
+    record.id === `notes-${docId}` ||
+    record.id.startsWith(`line-${docId}-`)
+  ) {
+    return true;
+  }
+
+  return (
+    record.data.documentId === docId ||
+    record.data.draftId === docId
+  );
+}
+
+export async function deleteDocumentBundle(docId: string): Promise<number> {
+  const db = await readDatabase();
+  const before = db.records.length;
+  db.records = db.records.filter((record) => !recordBelongsToDocument(record, docId));
+  const removed = before - db.records.length;
+  if (removed > 0) await writeDatabase(db);
+  return removed;
+}
+
+function purgeStaleDocumentRecords(
+  db: DatabaseSchema,
+  docId: string,
+  incomingIds: Set<string>
+): void {
+  db.records = db.records.filter((record) => {
+    if (!recordBelongsToDocument(record, docId)) return true;
+
+    const isCoreRecord =
+      record.id === `draft-${docId}` ||
+      record.id === `doc-${docId}` ||
+      record.id === `client-${docId}`;
+
+    if (isCoreRecord) return true;
+
+    return incomingIds.has(record.id);
+  });
+}
+
 export async function bulkUpsertRecords(
   records: Array<{
     id?: string;
@@ -127,6 +173,23 @@ export async function bulkUpsertRecords(
   const db = await readDatabase();
   const now = new Date().toISOString();
   let upserted = 0;
+
+  const docIds = new Set<string>();
+  for (const input of records) {
+    if (input.id?.startsWith("draft-")) {
+      docIds.add(input.id.replace("draft-", ""));
+    }
+    if (input.data.draftId) docIds.add(String(input.data.draftId));
+    if (input.data.documentId) docIds.add(String(input.data.documentId));
+  }
+
+  const incomingIds = new Set(
+    records.map((record) => record.id).filter(Boolean) as string[]
+  );
+
+  for (const docId of docIds) {
+    purgeStaleDocumentRecords(db, docId, incomingIds);
+  }
 
   for (const input of records) {
     const id = input.id ?? crypto.randomUUID();

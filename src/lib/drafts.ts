@@ -123,6 +123,39 @@ export function createDemoDraftState(docType: DocType = "Quote"): DraftState {
   return state;
 }
 
+export function isBlankDraftState(state: DraftState): boolean {
+  const { client, services, laborTitle, laborHours, laborRate, deposit, notes } =
+    state;
+
+  const clientEmpty =
+    !client.clientName.trim() &&
+    !client.companyName.trim() &&
+    !client.email.trim() &&
+    !client.phone.trim() &&
+    !client.url.trim() &&
+    !client.projectName.trim();
+
+  const servicesEmpty =
+    services.length <= 1 &&
+    services.every(
+      (item) =>
+        !item.service.trim() &&
+        !item.description.trim() &&
+        item.quantity === 1 &&
+        item.unitPrice === 0
+    );
+
+  return (
+    clientEmpty &&
+    servicesEmpty &&
+    !laborTitle.trim() &&
+    laborHours === 0 &&
+    laborRate === 0 &&
+    !notes.trim() &&
+    (deposit ?? 0) === 0
+  );
+}
+
 export function calculateGrandTotal(state: DraftState): number {
   return calculateDraftTotals(state).grandTotal;
 }

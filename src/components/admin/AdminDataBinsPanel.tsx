@@ -97,8 +97,8 @@ export default function AdminDataBinsPanel({
       await refresh();
       setMessage(
         result
-          ? `Synced ${result.upserted} records at ${new Date(result.lastSyncedAt).toLocaleString()}`
-          : "No local drafts to sync"
+          ? `Synced ${result.upserted} draft(s) from cloud at ${new Date(result.lastSyncedAt).toLocaleString()}`
+          : "Cloud drafts are already up to date"
       );
     } catch {
       setMessage("Sync failed");

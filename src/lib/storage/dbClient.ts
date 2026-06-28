@@ -246,7 +246,7 @@ export function mergeDraftLists(
 ): SavedDraft[] {
   const merged = new Map<string, SavedDraft>();
 
-  for (const draft of [...localDrafts, ...serverDrafts]) {
+  for (const draft of [...serverDrafts, ...localDrafts]) {
     const existing = merged.get(draft.id);
     if (!existing) {
       merged.set(draft.id, draft);
@@ -260,7 +260,28 @@ export function mergeDraftLists(
     }
   }
 
-  return Array.from(merged.values()).sort(
+  const byDocumentNumber = new Map<string, SavedDraft>();
+  for (const draft of merged.values()) {
+    const docNumber = draft.state.client.documentNumber.trim();
+    if (!docNumber) {
+      byDocumentNumber.set(draft.id, draft);
+      continue;
+    }
+
+    const existing = byDocumentNumber.get(docNumber);
+    if (!existing) {
+      byDocumentNumber.set(docNumber, draft);
+      continue;
+    }
+
+    const existingTime = new Date(existing.savedAt).getTime();
+    const draftTime = new Date(draft.savedAt).getTime();
+    if (draftTime >= existingTime) {
+      byDocumentNumber.set(docNumber, draft);
+    }
+  }
+
+  return Array.from(byDocumentNumber.values()).sort(
     (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
   );
 }
@@ -330,6 +351,7 @@ export async function masterResetDatabase(): Promise<void> {
 
   if (typeof window !== "undefined") {
     sessionStorage.removeItem("overdrive-open-submission");
+    localStorage.removeItem("overdrive-invoice-draft");
   }
 }
 
@@ -337,51 +359,44 @@ export async function deleteDraftEverywhere(id: string): Promise<void> {
   const { deleteDraft } = await import("@/lib/drafts");
   deleteDraft(id);
 
-  const relatedIds = [
-    `draft-${id}`,
-    `doc-${id}`,
-    `client-${id}`,
-    `labor-${id}`,
-    `notes-${id}`,
-  ];
+  const response = await fetch(`/api/storage/documents/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 
-  await Promise.allSettled(
-    relatedIds.map((recordId) => deleteStoredRecord(recordId))
-  );
+  if (!response.ok) {
+    throw new Error("Failed to delete draft records");
+  }
 }
 
 export async function pullServerDraftsToLocal(): Promise<number> {
-  const { saveDraftToLibrary, listDrafts } = await import("@/lib/drafts");
+  const { saveDraftToLibrary, listDrafts, clearAllDrafts } = await import(
+    "@/lib/drafts"
+  );
   const serverDrafts = await fetchServerDrafts();
-  const localIds = new Set(listDrafts().map((d) => d.id));
-  let pulled = 0;
+  const merged = mergeDraftLists(listDrafts(), serverDrafts);
 
-  for (const draft of serverDrafts) {
-    if (!localIds.has(draft.id)) {
-      saveDraftToLibrary(draft.state, draft.id);
-      pulled++;
-    }
+  clearAllDrafts();
+  for (const draft of merged) {
+    saveDraftToLibrary(draft.state, draft.id);
   }
 
-  return pulled;
+  return merged.length;
 }
 
 export async function runAppInitSync(): Promise<SyncResult | null> {
   if (typeof window === "undefined") return null;
 
   try {
-    await pullServerDraftsToLocal();
+    const pulled = await pullServerDraftsToLocal();
+    if (pulled > 0) {
+      return {
+        upserted: pulled,
+        lastSyncedAt: new Date().toISOString(),
+      };
+    }
   } catch {
     // cloud may be unavailable locally
   }
 
-  const { listDrafts } = await import("@/lib/drafts");
-  const drafts = listDrafts();
-  if (drafts.length === 0) return null;
-
-  try {
-    return await syncToInternalDatabase({ drafts });
-  } catch {
-    return null;
-  }
+  return null;
 }

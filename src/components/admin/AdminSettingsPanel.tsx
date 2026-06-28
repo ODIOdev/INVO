@@ -8,11 +8,13 @@ import { masterResetDatabase } from "@/lib/storage/dbClient";
 type AdminSettingsPanelProps = {
   backend: "redis" | "local";
   totalRecords: number;
+  stripeConfigured: boolean;
 };
 
 export default function AdminSettingsPanel({
   backend,
   totalRecords,
+  stripeConfigured,
 }: AdminSettingsPanelProps) {
   const router = useRouter();
   const [confirmText, setConfirmText] = useState("");
@@ -93,6 +95,29 @@ export default function AdminSettingsPanel({
               <dd className="mt-1 text-sm font-semibold text-zinc-900">
                 {totalRecords}
               </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-zinc-900">Payments</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Stripe Checkout links are added to invoice emails when configured.
+          </p>
+          <dl className="mt-4">
+            <div className="rounded-md bg-zinc-50 px-4 py-3">
+              <dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+                Stripe
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-zinc-900">
+                {stripeConfigured ? "Connected" : "Not configured"}
+              </dd>
+              {!stripeConfigured && (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Add <span className="font-mono">STRIPE_SECRET_KEY</span> to
+                  your environment variables.
+                </p>
+              )}
             </div>
           </dl>
         </section>

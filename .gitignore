@@ -39,3 +39,6 @@ yarn-error.log*
 # internal database
 /.data/
 
+# local secrets / scratch
+/txt/
+

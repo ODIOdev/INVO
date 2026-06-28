@@ -11,6 +11,7 @@ import {
   formatMoney as money,
   generateDocumentNumber,
   getDraft,
+  isBlankDraftState,
   saveDraftToLibrary,
   type ClientInfo,
   type DocType,
@@ -18,6 +19,7 @@ import {
   type ServiceItem,
 } from "@/lib/drafts";
 import { downloadPdf as exportPdf } from "@/lib/pdf-export";
+import { sendInvoiceEmail } from "@/lib/invoice-email-html";
 import {
   finalizeCompletedInvoice,
   loadOpenedSubmission,
@@ -74,6 +76,7 @@ export default function InvoiceSystem() {
   );
   const [toast, setToast] = useState<Toast>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [showExitPrompt, setShowExitPrompt] = useState(false);
 
@@ -107,6 +110,7 @@ export default function InvoiceSystem() {
   const taxAmount = subtotal * taxRate;
   const grandTotal = subtotal + taxAmount;
   const balanceDue = Math.max(0, grandTotal - (deposit ?? 0));
+  const isBlankInvoice = !currentDraftId && isBlankDraftState(state);
 
   const updateClient = (field: keyof ClientInfo, value: string) => {
     setState((prev) => ({
@@ -196,25 +200,36 @@ export default function InvoiceSystem() {
     }
   };
 
-  const handleSend = () => {
-    if (!client.email) {
+  const handleSend = async () => {
+    const recipient = client.email.trim();
+    if (!recipient) {
       setToast({
-        message: "Please enter a client email address",
+        message: "Enter a client email address to send the invoice",
         type: "error",
       });
       return;
     }
-    const subject = encodeURIComponent(
-      `${docType} ${client.documentNumber} — ${client.projectName || "Over Drive OS"}`
-    );
-    const body = encodeURIComponent(
-      `Hi ${client.clientName || "there"},\n\nPlease find your ${docType.toLowerCase()} from Over Drive OS.\n\nTotal: ${money(balanceDue)}\nDue Date: ${client.dueDate}\n\nThank you for your business.\n\n— Over Drive OS`
-    );
-    window.open(
-      `mailto:${client.email}?subject=${subject}&body=${body}`,
-      "_blank"
-    );
-    setToast({ message: "Email client opened", type: "success" });
+
+    setIsSendingEmail(true);
+    try {
+      const result = await sendInvoiceEmail(state, recipient);
+      setToast({
+        message:
+          result.mode === "sent"
+            ? `Invoice sent to ${result.to}`
+            : "Mail opened — use the downloaded .eml for formatted HTML",
+        type: "success",
+      });
+    } catch (error) {
+      console.error("Email send failed:", error);
+      setToast({
+        message:
+          error instanceof Error ? error.message : "Failed to send email",
+        type: "error",
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
   };
 
   const handleConvertToInvoice = async () => {
@@ -711,25 +726,34 @@ export default function InvoiceSystem() {
 
         {/* Actions — outside PDF */}
         <div className="action-bar">
-          <Link href="/admin" className="btn-outline">
-            Admin
-          </Link>
+          {!isBlankInvoice && (
+            <Link href="/admin" className="btn-outline">
+              Admin
+            </Link>
+          )}
           <button type="button" onClick={handleClearForm} className="btn-outline">
             Clear
           </button>
           <button type="button" onClick={handleSaveDraft} className="btn-outline">
             Save Draft
           </button>
+          {!isBlankInvoice && (
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isExporting}
+              className="btn-outline"
+            >
+              {isExporting ? "Generating…" : "Download PDF"}
+            </button>
+          )}
           <button
             type="button"
-            onClick={handleDownloadPdf}
-            disabled={isExporting}
+            onClick={handleSend}
+            disabled={isSendingEmail}
             className="btn-outline"
           >
-            {isExporting ? "Generating…" : "Download PDF"}
-          </button>
-          <button type="button" onClick={handleSend} className="btn-outline">
-            Send {docType}
+            {isSendingEmail ? "Sending…" : "Email"}
           </button>
           {docType === "Quote" && (
             <button

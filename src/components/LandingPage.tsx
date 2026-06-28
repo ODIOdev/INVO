@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { SavedDraftsButton } from "@/components/SavedDraftsModal";
 
 const features = [
   {
@@ -38,8 +37,8 @@ export default function LandingPage() {
             <Link href="/admin" className="btn-outline text-xs">
               Admin
             </Link>
-            <Link href="/invoice" className="btn">
-              Open App
+            <Link href="/admin/settings" className="btn">
+              Settings
             </Link>
           </div>
         </div>
@@ -59,12 +58,8 @@ export default function LandingPage() {
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link href="/invoice" className="btn px-8 py-3 text-sm">
-            Create a Quote
+            Create Invoice
           </Link>
-          <Link href="/invoice" className="btn-outline px-8 py-3 text-sm">
-            Create an Invoice
-          </Link>
-          <SavedDraftsButton className="btn-outline px-8 py-3 text-sm" />
         </div>
       </section>
 

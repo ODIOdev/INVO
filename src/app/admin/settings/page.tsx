@@ -1,4 +1,5 @@
 import AdminSettingsPanel from "@/components/admin/AdminSettingsPanel";
+import { hasStripeConfig } from "@/lib/stripe-checkout";
 import {
   getDatabaseStats,
   getStorageBackend,
@@ -17,6 +18,7 @@ export default async function AdminSettingsPage() {
     <AdminSettingsPanel
       backend={getStorageBackend()}
       totalRecords={totalRecords}
+      stripeConfigured={hasStripeConfig()}
     />
   );
 }
