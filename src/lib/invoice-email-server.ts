@@ -176,5 +176,9 @@ export async function sendInvoiceViaSmtp(
     subject,
     html,
     text: plainText,
+    headers: {
+      "Color-Scheme": "light",
+      "X-Color-Scheme": "light",
+    },
   });
 }
