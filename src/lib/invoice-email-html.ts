@@ -113,16 +113,15 @@ function pdfDownloadCardHtml(
       <div class="email-label" style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">Download PDF</div>
       <div class="email-title" style="font-size:18px;font-weight:600;color:#18181b;line-height:1.3;margin-bottom:6px;">${esc(label)} ${esc(docNumber)}</div>
       <div class="email-muted" style="font-size:13px;color:#71717a;margin-bottom:20px;">Save or print your ${esc(label.toLowerCase())}</div>
-      <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
-        <tr><td style="background:#18181b;border-radius:8px;padding:14px 36px;">
-          <a href="${safeUrl}" target="_blank" style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;text-decoration:none;display:inline-block;">
-            Download PDF
-          </a>
-        </td></tr>
+      <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;border-collapse:separate;">
+        <tr>
+          <td align="center" bgcolor="#18181b" style="background:#18181b;border-radius:8px;mso-padding-alt:14px 36px;">
+            <a href="${safeUrl}" style="display:block;padding:14px 36px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;text-decoration:none;border:0;outline:none;line-height:1.2;">
+              Download PDF
+            </a>
+          </td>
+        </tr>
       </table>
-      <div style="margin-top:16px;font-size:13px;line-height:1.5;">
-        <a href="${safeUrl}" target="_blank" style="color:#18181b;font-weight:600;text-decoration:underline;">Click here to download</a>
-      </div>
     </td></tr>
   </table>`;
 }

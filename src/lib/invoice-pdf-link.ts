@@ -109,5 +109,5 @@ export async function createInvoicePdfDownloadUrl(
 ): Promise<string> {
   const token = randomUUID();
   await storePdfDownloadToken(token, state);
-  return `${getPublicAppUrl()}/api/invoice/pdf?token=${encodeURIComponent(token)}`;
+  return `${getPublicAppUrl()}/api/invoice/pdf?token=${encodeURIComponent(token)}&dl=1`;
 }

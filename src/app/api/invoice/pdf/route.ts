@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import { generateInvoicePdfBuffer, getInvoicePdfFilename } from "@/lib/invoice-pdf";
 import { getPdfDownloadState } from "@/lib/invoice-pdf-link";
 
+function attachmentDisposition(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7E]/g, "_");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
 export async function GET(request: Request) {
-  const token = new URL(request.url).searchParams.get("token")?.trim() ?? "";
+  const { searchParams } = new URL(request.url);
+  const token = searchParams.get("token")?.trim() ?? "";
 
   if (!token) {
     return NextResponse.json({ error: "Missing download token." }, { status: 400 });
@@ -24,9 +30,12 @@ export async function GET(request: Request) {
     return new NextResponse(new Uint8Array(pdf), {
       status: 200,
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "private, no-store",
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": attachmentDisposition(filename),
+        "Content-Transfer-Encoding": "binary",
+        "Cache-Control": "private, no-store, no-cache, must-revalidate",
+        "Pragma": "no-cache",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {
