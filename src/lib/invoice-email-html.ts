@@ -46,8 +46,7 @@ function summaryRow(label: string, value: string, bold = false): string {
 export type InvoiceEmailRenderOptions = {
   logoUrl?: string;
   paymentUrl?: string | null;
-  pdfDownloadUrl?: string | null;
-  pdfDownloadButtonImageUrl?: string | null;
+  pdfAttachmentFilename?: string | null;
 };
 
 function hrefAttr(url: string): string {
@@ -103,28 +102,28 @@ function paymentCardHtml(
 }
 
 function pdfDownloadCardHtml(
-  downloadUrl: string,
-  buttonImageUrl: string,
   docType: string,
-  docNumber: string
+  docNumber: string,
+  pdfFilename: string
 ): string {
-  const safeUrl = hrefAttr(downloadUrl);
-  const safeImageUrl = hrefAttr(buttonImageUrl);
   const label = docType === "Quote" ? "Quote" : "Invoice";
   return `<table width="100%" cellpadding="0" cellspacing="0" class="email-panel" style="margin:28px 0;border:1px solid #e4e4e7;border-radius:12px;${WHITE_BG}">
     <tr><td style="padding:24px;text-align:center;${WHITE_BG}">
       <div class="email-label" style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">Download PDF</div>
       <div class="email-title" style="font-size:18px;font-weight:600;color:#18181b;line-height:1.3;margin-bottom:6px;">${esc(label)} ${esc(docNumber)}</div>
-      <div class="email-muted" style="font-size:13px;color:#71717a;margin-bottom:20px;">Save or print your ${esc(label.toLowerCase())}</div>
-      <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;border-collapse:separate;">
+      <div class="email-muted" style="font-size:13px;color:#71717a;margin-bottom:20px;">Your PDF is attached to this email</div>
+      <table cellpadding="0" cellspacing="0" align="center" role="presentation" style="margin:0 auto;border-collapse:separate;">
         <tr>
-          <td align="center" style="line-height:0;font-size:0;">
-            <a href="${safeUrl}" style="border:0;text-decoration:none;display:inline-block;line-height:0;">
-              <img src="${safeImageUrl}" alt="Download PDF" width="360" height="52" border="0" style="display:block;border:0;outline:none;text-decoration:none;margin:0 auto;" />
-            </a>
+          <td align="center" width="240" bgcolor="#18181b" style="background-color:#18181b;border-radius:8px;width:240px;mso-padding-alt:14px 0;">
+            <span style="display:block;padding:14px 32px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;line-height:1.2;text-decoration:none;">
+              Download PDF
+            </span>
           </td>
         </tr>
       </table>
+      <div class="email-muted" style="margin-top:16px;font-size:13px;line-height:1.5;color:#71717a;">
+        Open the attachment: <strong style="color:#18181b;font-weight:600;">${esc(pdfFilename)}</strong>
+      </div>
     </td></tr>
   </table>`;
 }
@@ -137,8 +136,7 @@ export function generateInvoiceEmailHtml(
     typeof options === "string" ? { logoUrl: options } : (options ?? {});
   const logoDataUrl = renderOptions.logoUrl;
   const paymentUrl = renderOptions.paymentUrl ?? null;
-  const pdfDownloadUrl = renderOptions.pdfDownloadUrl ?? null;
-  const pdfDownloadButtonImageUrl = renderOptions.pdfDownloadButtonImageUrl ?? null;
+  const pdfAttachmentFilename = renderOptions.pdfAttachmentFilename ?? null;
   const { docType, client, services, laborTitle, laborHours, laborRate, notes } =
     state;
   const totals = calculateDraftTotals(state);
@@ -197,15 +195,13 @@ export function generateInvoiceEmailHtml(
         )
       : "";
 
-  const pdfDownloadHtml =
-    pdfDownloadUrl && pdfDownloadButtonImageUrl
-      ? pdfDownloadCardHtml(
-          pdfDownloadUrl,
-          pdfDownloadButtonImageUrl,
-          docType,
-          client.documentNumber || docType
-        )
-      : "";
+  const pdfDownloadHtml = pdfAttachmentFilename
+    ? pdfDownloadCardHtml(
+        docType,
+        client.documentNumber || docType,
+        pdfAttachmentFilename
+      )
+    : "";
 
   const notesHtml = (notes ?? "").trim()
     ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
@@ -325,7 +321,7 @@ export function generateInvoiceEmailHtml(
 
 export function generateInvoicePlainText(
   state: DraftState,
-  options?: { paymentUrl?: string | null; pdfDownloadUrl?: string | null }
+  options?: { paymentUrl?: string | null; pdfAttachmentFilename?: string | null }
 ): string {
   const { docType, client, notes } = state;
   const totals = calculateDraftTotals(state);
@@ -349,8 +345,12 @@ export function generateInvoicePlainText(
     lines.unshift("", `Pay online: ${options.paymentUrl}`, "");
   }
 
-  if (options?.pdfDownloadUrl) {
-    lines.push("", `Download PDF: ${options.pdfDownloadUrl}`);
+  if (options?.pdfAttachmentFilename) {
+    lines.push(
+      "",
+      `PDF attached: ${options.pdfAttachmentFilename}`,
+      "Open the attachment on this email to download your document."
+    );
   }
 
   lines.push("", "— Over Drive OS", "www.overdriveio.com");

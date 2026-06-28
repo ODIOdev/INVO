@@ -246,14 +246,14 @@ export default function InvoiceSystem() {
       const result = await sendInvoiceEmail(state, recipient);
       if (docType === "Quote") {
         setToast({
-          message: `Quote emailed to ${result.to} with PDF download link`,
+          message: `Quote emailed to ${result.to} with PDF attached`,
           type: "success",
         });
       } else {
         setToast({
           message: result.paymentIncluded
-            ? `Invoice emailed to ${result.to} with PDF link and Stripe payment link`
-            : `Invoice emailed to ${result.to} with PDF download link`,
+            ? `Invoice emailed to ${result.to} with PDF attached and Stripe payment link`
+            : `Invoice emailed to ${result.to} with PDF attached`,
           type: "success",
         });
       }

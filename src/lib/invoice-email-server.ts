@@ -4,11 +4,14 @@ import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import type { DraftState } from "@/lib/drafts";
 import {
+  buildInvoicePdfAttachment,
+  INVOICE_PDF_CID,
+} from "@/lib/invoice-email-attachment";
+import {
   generateInvoiceEmailHtml,
   generateInvoicePlainText,
 } from "@/lib/invoice-email-html";
 import { buildInvoicePaymentLink } from "@/lib/stripe-checkout";
-import { createInvoicePdfDownloadUrl, getPdfDownloadButtonImageUrl } from "@/lib/invoice-pdf-link";
 
 function getPublicAppUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL?.trim()) {
@@ -48,7 +51,7 @@ export async function buildInvoiceEmailBodies(
   html: string;
   plainText: string;
   paymentUrl: string | null;
-  pdfDownloadUrl: string;
+  pdfAttachment: Awaited<ReturnType<typeof buildInvoicePdfAttachment>>;
   subject: string;
 }> {
   const subject = buildInvoiceEmailSubject(state);
@@ -58,18 +61,19 @@ export async function buildInvoiceEmailBodies(
         ? existingPaymentUrl
         : buildInvoicePaymentLink(state, to)
       : null;
-  const pdfDownloadUrl = await createInvoicePdfDownloadUrl(state);
-  const pdfDownloadButtonImageUrl = getPdfDownloadButtonImageUrl();
+  const pdfAttachment = await buildInvoicePdfAttachment(state);
   const logo = logoUrl ?? getHostedLogoUrl();
   const html = generateInvoiceEmailHtml(state, {
     logoUrl: logo,
     paymentUrl,
-    pdfDownloadUrl,
-    pdfDownloadButtonImageUrl,
+    pdfAttachmentFilename: pdfAttachment.filename,
   });
-  const plainText = generateInvoicePlainText(state, { paymentUrl, pdfDownloadUrl });
+  const plainText = generateInvoicePlainText(state, {
+    paymentUrl,
+    pdfAttachmentFilename: pdfAttachment.filename,
+  });
 
-  return { html, plainText, paymentUrl, pdfDownloadUrl, subject };
+  return { html, plainText, paymentUrl, pdfAttachment, subject };
 }
 
 export function hasSmtpConfig(): boolean {
@@ -141,11 +145,8 @@ export async function sendInvoiceViaResend(
 ): Promise<void> {
   const resend = new Resend(process.env.RESEND_API_KEY!);
   const logo = await loadServerLogoDataUrl();
-  const { html, plainText, subject } = await buildInvoiceEmailBodies(
-    state,
-    to,
-    logo ?? getHostedLogoUrl()
-  );
+  const { html, plainText, subject, pdfAttachment } =
+    await buildInvoiceEmailBodies(state, to, logo ?? getHostedLogoUrl());
 
   const { error } = await resend.emails.send({
     from: getFromAddress(),
@@ -153,6 +154,14 @@ export async function sendInvoiceViaResend(
     subject,
     html,
     text: plainText,
+    attachments: [
+      {
+        filename: pdfAttachment.filename,
+        content: pdfAttachment.content,
+        contentType: "application/pdf",
+        contentId: INVOICE_PDF_CID,
+      },
+    ],
   });
 
   if (error) {
@@ -165,11 +174,8 @@ export async function sendInvoiceViaSmtp(
   to: string
 ): Promise<void> {
   const logo = await loadServerLogoDataUrl();
-  const { html, plainText, subject } = await buildInvoiceEmailBodies(
-    state,
-    to,
-    logo ?? getHostedLogoUrl()
-  );
+  const { html, plainText, subject, pdfAttachment } =
+    await buildInvoiceEmailBodies(state, to, logo ?? getHostedLogoUrl());
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -187,6 +193,15 @@ export async function sendInvoiceViaSmtp(
     subject,
     html,
     text: plainText,
+    attachments: [
+      {
+        filename: pdfAttachment.filename,
+        content: pdfAttachment.content,
+        contentType: "application/pdf",
+        contentDisposition: "attachment",
+        cid: INVOICE_PDF_CID,
+      },
+    ],
     headers: {
       "Color-Scheme": "light",
       "X-Color-Scheme": "light",
