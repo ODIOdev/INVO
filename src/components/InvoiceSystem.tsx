@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import InvoicePaperFooter from "@/components/InvoicePaperFooter";
 import InvoicePaperHeader from "@/components/InvoicePaperHeader";
+import EmailSetupNotice from "@/components/EmailSetupNotice";
 import {
   createDefaultState,
   formatMoney as money,
@@ -79,6 +80,7 @@ export default function InvoiceSystem() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [showExitPrompt, setShowExitPrompt] = useState(false);
+  const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null);
 
   const {
     docType,
@@ -200,6 +202,15 @@ export default function InvoiceSystem() {
     }
   };
 
+  useEffect(() => {
+    fetch("/api/email/status", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data: { configured?: boolean }) =>
+        setEmailConfigured(Boolean(data.configured))
+      )
+      .catch(() => setEmailConfigured(false));
+  }, []);
+
   const handleSend = async () => {
     const recipient = client.email.trim();
     if (!recipient) {
@@ -210,14 +221,20 @@ export default function InvoiceSystem() {
       return;
     }
 
+    if (emailConfigured === false) {
+      setToast({
+        message:
+          "Connect Resend first — follow the setup steps in the yellow banner above",
+        type: "error",
+      });
+      return;
+    }
+
     setIsSendingEmail(true);
     try {
       const result = await sendInvoiceEmail(state, recipient);
       setToast({
-        message:
-          result.mode === "sent"
-            ? `Invoice sent to ${result.to}`
-            : "Mail opened — use the downloaded .eml for formatted HTML",
+        message: `Invoice emailed to ${result.to} with payment link`,
         type: "success",
       });
     } catch (error) {
@@ -723,6 +740,12 @@ export default function InvoiceSystem() {
             <InvoicePaperFooter />
           </div>
         </article>
+
+        {emailConfigured === false && (
+          <div className="mx-auto mt-4 max-w-[816px]">
+            <EmailSetupNotice />
+          </div>
+        )}
 
         {/* Actions — outside PDF */}
         <div className="action-bar">

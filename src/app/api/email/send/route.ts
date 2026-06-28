@@ -2,12 +2,9 @@ import { NextResponse } from "next/server";
 import type { DraftState } from "@/lib/drafts";
 import {
   buildInvoiceEmailSubject,
-  hasResendConfig,
-  hasSmtpConfig,
-  sendInvoiceViaResend,
-  sendInvoiceViaSmtp,
+  hasEmailConfig,
+  sendInvoiceEmail as sendInvoiceEmailServer,
 } from "@/lib/invoice-email-server";
-import { createInvoicePaymentUrl } from "@/lib/stripe-checkout";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -21,27 +18,22 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!hasEmailConfig()) {
+    return NextResponse.json(
+      {
+        error:
+          "Email is not configured. Install the Resend integration on Vercel or add RESEND_API_KEY to your environment variables.",
+        setupUrl: "https://vercel.com/integrations/resend",
+      },
+      { status: 503 }
+    );
+  }
+
   const subject = buildInvoiceEmailSubject(state);
 
   try {
-    if (hasResendConfig()) {
-      await sendInvoiceViaResend(state, to);
-      return NextResponse.json({ mode: "sent", to, subject });
-    }
-
-    if (hasSmtpConfig()) {
-      await sendInvoiceViaSmtp(state, to);
-      return NextResponse.json({ mode: "sent", to, subject });
-    }
-
-    const paymentUrl = await createInvoicePaymentUrl(state, to).catch(() => null);
-
-    return NextResponse.json({
-      mode: "compose",
-      to,
-      subject,
-      paymentUrl,
-    });
+    await sendInvoiceEmailServer(state, to);
+    return NextResponse.json({ to, subject });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to send email";

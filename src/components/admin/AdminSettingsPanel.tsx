@@ -9,12 +9,16 @@ type AdminSettingsPanelProps = {
   backend: "redis" | "local";
   totalRecords: number;
   stripeConfigured: boolean;
+  emailConfigured: boolean;
+  emailProvider: string | null;
 };
 
 export default function AdminSettingsPanel({
   backend,
   totalRecords,
   stripeConfigured,
+  emailConfigured,
+  emailProvider,
 }: AdminSettingsPanelProps) {
   const router = useRouter();
   const [confirmText, setConfirmText] = useState("");
@@ -95,6 +99,42 @@ export default function AdminSettingsPanel({
               <dd className="mt-1 text-sm font-semibold text-zinc-900">
                 {totalRecords}
               </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-zinc-900">Email</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Sends the full HTML invoice with Stripe pay button directly to your
+            client&apos;s inbox.
+          </p>
+          <dl className="mt-4">
+            <div className="rounded-md bg-zinc-50 px-4 py-3">
+              <dt className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+                Delivery
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-zinc-900">
+                {emailConfigured
+                  ? `Connected (${emailProvider})`
+                  : "Not configured"}
+              </dd>
+              {!emailConfigured && (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Fastest setup:{" "}
+                  <a
+                    href="https://vercel.com/integrations/resend"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-zinc-700 underline"
+                  >
+                    Install Resend on Vercel
+                  </a>{" "}
+                  (auto-adds <span className="font-mono">RESEND_API_KEY</span>
+                  ). Or add it manually in Vercel env vars with{" "}
+                  <span className="font-mono">EMAIL_FROM</span>.
+                </p>
+              )}
             </div>
           </dl>
         </section>
