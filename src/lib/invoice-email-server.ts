@@ -51,9 +51,11 @@ export async function buildInvoiceEmailBodies(
 }> {
   const subject = buildInvoiceEmailSubject(state);
   const paymentUrl =
-    existingPaymentUrl !== undefined
-      ? existingPaymentUrl
-      : buildInvoicePaymentLink(state, to);
+    state.docType === "Invoice"
+      ? existingPaymentUrl !== undefined
+        ? existingPaymentUrl
+        : buildInvoicePaymentLink(state, to)
+      : null;
   const logo = logoUrl ?? getHostedLogoUrl();
   const html = generateInvoiceEmailHtml(state, { logoUrl: logo, paymentUrl });
   const plainText = generateInvoicePlainText(state, { paymentUrl });

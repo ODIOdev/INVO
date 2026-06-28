@@ -149,8 +149,22 @@ export function generateInvoiceEmailHtml(
   const summaryColspan = hasLabor ? "" : ' colspan="2"';
 
   const depositRow =
-    totals.deposit > 0
+    docType === "Invoice" && totals.deposit > 0
       ? summaryRow("Deposit", `-${moneyForEmail(totals.deposit)}`)
+      : "";
+
+  const amountDue =
+    docType === "Invoice" ? totals.balanceDue : totals.grandTotal;
+
+  const paymentHtml =
+    docType === "Invoice" &&
+    paymentUrl &&
+    totals.balanceDue >= 0.5
+      ? paymentCardHtml(
+          paymentUrl,
+          moneyForEmail(totals.balanceDue),
+          formatDisplayDate(client.dueDate)
+        )
       : "";
 
   const notesHtml = (notes ?? "").trim()
@@ -161,15 +175,6 @@ export function generateInvoiceEmailHtml(
         </td></tr>
       </table>`
     : "";
-
-  const paymentHtml =
-    paymentUrl && totals.balanceDue >= 0.5
-      ? paymentCardHtml(
-          paymentUrl,
-          moneyForEmail(totals.balanceDue),
-          formatDisplayDate(client.dueDate)
-        )
-      : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -252,8 +257,8 @@ export function generateInvoiceEmailHtml(
                     </table>
                     <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;border-top:1px solid #e4e4e7;">
                       <tr>
-                        <td class="email-total" style="padding-top:12px;font-size:13px;font-weight:600;color:#18181b;">Total Due</td>
-                        <td class="email-total" style="padding-top:12px;font-size:22px;font-weight:700;color:#18181b;text-align:right;">${moneyForEmail(totals.balanceDue)}</td>
+                        <td class="email-total" style="padding-top:12px;font-size:13px;font-weight:600;color:#18181b;">${docType === "Invoice" ? "Total Due" : "Total"}</td>
+                        <td class="email-total" style="padding-top:12px;font-size:22px;font-weight:700;color:#18181b;text-align:right;">${moneyForEmail(amountDue)}</td>
                       </tr>
                     </table>
                   </td></tr>
@@ -283,17 +288,23 @@ export function generateInvoicePlainText(
 ): string {
   const { docType, client, notes } = state;
   const totals = calculateDraftTotals(state);
+  const amountDue =
+    docType === "Invoice" ? totals.balanceDue : totals.grandTotal;
   const lines = [
     `${docType} ${client.documentNumber}`,
     client.projectName || "Untitled Project",
     "",
-    `Total Due: ${moneyForEmail(totals.balanceDue)}`,
+    `${docType === "Invoice" ? "Total Due" : "Total"}: ${moneyForEmail(amountDue)}`,
     `Due Date: ${formatDisplayDate(client.dueDate)}`,
     "",
     (notes ?? "").trim() || "",
   ];
 
-  if (options?.paymentUrl && totals.balanceDue >= 0.5) {
+  if (
+    docType === "Invoice" &&
+    options?.paymentUrl &&
+    totals.balanceDue >= 0.5
+  ) {
     lines.unshift("", `Pay online: ${options.paymentUrl}`, "");
   }
 

@@ -34,11 +34,13 @@ export async function POST(request: Request) {
   try {
     await sendInvoiceEmailServer(state, to);
     const { buildInvoicePaymentLink } = await import("@/lib/stripe-checkout");
-    const paymentUrl = buildInvoicePaymentLink(state, to);
+    const paymentUrl =
+      state.docType === "Invoice" ? buildInvoicePaymentLink(state, to) : null;
     return NextResponse.json({
       to,
       subject,
       paymentIncluded: Boolean(paymentUrl),
+      docType: state.docType,
     });
   } catch (error) {
     const message =

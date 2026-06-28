@@ -115,6 +115,7 @@ export default function InvoiceSystem() {
   const taxAmount = subtotal * taxRate;
   const grandTotal = subtotal + taxAmount;
   const balanceDue = Math.max(0, grandTotal - (deposit ?? 0));
+  const displayTotal = docType === "Invoice" ? balanceDue : grandTotal;
   const isBlankInvoice = !currentDraftId && isBlankDraftState(state);
 
   const updateClient = (field: keyof ClientInfo, value: string) => {
@@ -245,12 +246,19 @@ export default function InvoiceSystem() {
     setIsSendingEmail(true);
     try {
       const result = await sendInvoiceEmail(state, recipient);
-      setToast({
-        message: result.paymentIncluded
-          ? `Invoice emailed to ${result.to} with Stripe payment link`
-          : `Invoice emailed to ${result.to} (add line items so total is at least $0.50 for payment link)`,
-        type: "success",
-      });
+      if (docType === "Quote") {
+        setToast({
+          message: `Quote emailed to ${result.to}`,
+          type: "success",
+        });
+      } else {
+        setToast({
+          message: result.paymentIncluded
+            ? `Invoice emailed to ${result.to} with Stripe payment link`
+            : `Invoice emailed to ${result.to} (add line items so total is at least $0.50 for payment link)`,
+          type: "success",
+        });
+      }
     } catch (error) {
       console.error("Email send failed:", error);
       setToast({
@@ -708,28 +716,32 @@ export default function InvoiceSystem() {
                     value={money(taxAmount)}
                   />
                   <SummaryRow label="Total" value={money(grandTotal)} />
-                  <div className="flex items-center justify-between gap-4 pt-1">
-                    <span className="text-[13px] text-zinc-500">Deposit</span>
-                    <CurrencyInput
-                      value={deposit ?? 0}
-                      onChange={(v) =>
-                        setState((prev) => ({ ...prev, deposit: v }))
-                      }
-                      className="w-36"
-                    />
-                  </div>
-                  {(deposit ?? 0) > 0 && (
-                    <SummaryRow
-                      label="Less Deposit"
-                      value={`−${money(deposit ?? 0)}`}
-                    />
+                  {docType === "Invoice" && (
+                    <>
+                      <div className="flex items-center justify-between gap-4 pt-1">
+                        <span className="text-[13px] text-zinc-500">Deposit</span>
+                        <CurrencyInput
+                          value={deposit ?? 0}
+                          onChange={(v) =>
+                            setState((prev) => ({ ...prev, deposit: v }))
+                          }
+                          className="w-36"
+                        />
+                      </div>
+                      {(deposit ?? 0) > 0 && (
+                        <SummaryRow
+                          label="Less Deposit"
+                          value={`−${money(deposit ?? 0)}`}
+                        />
+                      )}
+                    </>
                   )}
                   <div className="totals-grand">
                     <span className="text-sm font-semibold text-zinc-900">
-                      Total Due
+                      {docType === "Invoice" ? "Total Due" : "Total"}
                     </span>
                     <span className="text-2xl font-bold tabular-nums text-zinc-900">
-                      {money(balanceDue)}
+                      {money(displayTotal)}
                     </span>
                   </div>
                 </div>
