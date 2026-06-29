@@ -1,10 +1,10 @@
 import { generateInvoicePdfBuffer, getInvoicePdfFilename } from "@/lib/invoice-pdf";
-import { getPdfDownloadState } from "@/lib/invoice-pdf-link";
+import { verifySignedPdfDownloadToken } from "@/lib/invoice-pdf-signed";
 import type { DraftState } from "@/lib/drafts";
 
-function attachmentDisposition(filename: string): string {
+function inlinePdfDisposition(filename: string): string {
   const ascii = filename.replace(/[^\x20-\x7E]/g, "_");
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+  return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 export async function buildPdfDownloadResponse(
@@ -17,14 +17,11 @@ export async function buildPdfDownloadResponse(
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": attachmentDisposition(filename),
-      "Content-Transfer-Encoding": "binary",
+      "Content-Disposition": inlinePdfDisposition(filename),
       "Content-Length": String(pdf.length),
       "Cache-Control": "private, no-store, no-cache, must-revalidate",
       Pragma: "no-cache",
       "X-Content-Type-Options": "nosniff",
-      "X-Download-Options": "noopen",
-      "Content-Description": "File Transfer",
     },
   });
 }
@@ -37,12 +34,12 @@ export async function pdfDownloadResponseForToken(
     return Response.json({ error: "Missing download token." }, { status: 400 });
   }
 
-  const state = await getPdfDownloadState(trimmed);
+  const state = verifySignedPdfDownloadToken(trimmed);
   if (!state) {
-    return Response.json(
-      { error: "This download link is invalid or has expired." },
-      { status: 404 }
-    );
+    return new Response("This download link is invalid or has expired.", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
 
   try {

@@ -4,6 +4,7 @@ import {
   type DataBinId,
   type DatabaseSchema,
   DATA_BINS,
+  type DeletedRecord,
   isDataBinId,
   type StoredRecord,
 } from "./dataBins";
@@ -95,11 +96,67 @@ export async function upsertRecord(input: {
 
 export async function deleteRecord(id: string): Promise<boolean> {
   const db = await readDatabase();
-  const next = db.records.filter((r) => r.id !== id);
-  if (next.length === db.records.length) return false;
-  db.records = next;
+  const index = db.records.findIndex((r) => r.id === id);
+  if (index < 0) return false;
+
+  const [record] = db.records.splice(index, 1);
+  const deletedAt = new Date().toISOString();
+
+  db.deletedRecords = db.deletedRecords.filter(
+    (entry) => entry.record.id !== id
+  );
+  db.deletedRecords.unshift({ record, deletedAt });
+
+  if (db.deletedRecords.length > 200) {
+    db.deletedRecords = db.deletedRecords.slice(0, 200);
+  }
+
   await writeDatabase(db);
   return true;
+}
+
+export async function getDeletedRecords(): Promise<DeletedRecord[]> {
+  const db = await readDatabase();
+  return [...db.deletedRecords].sort(
+    (a, b) =>
+      new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()
+  );
+}
+
+export async function restoreDeletedRecord(id: string): Promise<boolean> {
+  const db = await readDatabase();
+  const index = db.deletedRecords.findIndex((entry) => entry.record.id === id);
+  if (index < 0) return false;
+
+  const [entry] = db.deletedRecords.splice(index, 1);
+  const existingIndex = db.records.findIndex((r) => r.id === id);
+
+  if (existingIndex >= 0) {
+    db.records[existingIndex] = entry.record;
+  } else {
+    db.records.push(entry.record);
+  }
+
+  await writeDatabase(db);
+  return true;
+}
+
+export async function purgeDeletedRecord(id: string): Promise<boolean> {
+  const db = await readDatabase();
+  const next = db.deletedRecords.filter((entry) => entry.record.id !== id);
+  if (next.length === db.deletedRecords.length) return false;
+  db.deletedRecords = next;
+  await writeDatabase(db);
+  return true;
+}
+
+export async function purgeAllDeletedRecords(): Promise<number> {
+  const db = await readDatabase();
+  const removed = db.deletedRecords.length;
+  if (removed === 0) return 0;
+  db.deletedRecords = [];
+  await writeDatabase(db);
+  return removed;
 }
 
 export async function clearBin(binId: DataBinId): Promise<number> {
@@ -119,6 +176,7 @@ function recordBelongsToDocument(record: StoredRecord, docId: string): boolean {
   if (
     record.id === `draft-${docId}` ||
     record.id === `doc-${docId}` ||
+    record.id === `quote-${docId}` ||
     record.id === `client-${docId}` ||
     record.id === `labor-${docId}` ||
     record.id === `notes-${docId}` ||
@@ -135,11 +193,28 @@ function recordBelongsToDocument(record: StoredRecord, docId: string): boolean {
 
 export async function deleteDocumentBundle(docId: string): Promise<number> {
   const db = await readDatabase();
-  const before = db.records.length;
-  db.records = db.records.filter((record) => !recordBelongsToDocument(record, docId));
-  const removed = before - db.records.length;
-  if (removed > 0) await writeDatabase(db);
-  return removed;
+  const toDelete = db.records.filter((record) =>
+    recordBelongsToDocument(record, docId)
+  );
+  if (toDelete.length === 0) return 0;
+
+  const deletedAt = new Date().toISOString();
+  const ids = new Set(toDelete.map((record) => record.id));
+  db.records = db.records.filter((record) => !ids.has(record.id));
+
+  for (const record of toDelete) {
+    db.deletedRecords = db.deletedRecords.filter(
+      (entry) => entry.record.id !== record.id
+    );
+    db.deletedRecords.unshift({ record, deletedAt });
+  }
+
+  if (db.deletedRecords.length > 200) {
+    db.deletedRecords = db.deletedRecords.slice(0, 200);
+  }
+
+  await writeDatabase(db);
+  return toDelete.length;
 }
 
 function purgeStaleDocumentRecords(
@@ -153,6 +228,7 @@ function purgeStaleDocumentRecords(
     const isCoreRecord =
       record.id === `draft-${docId}` ||
       record.id === `doc-${docId}` ||
+      record.id === `quote-${docId}` ||
       record.id === `client-${docId}`;
 
     if (isCoreRecord) return true;
@@ -168,7 +244,8 @@ export async function bulkUpsertRecords(
     data: Record<string, unknown>;
     label?: string;
     source?: StoredRecord["source"];
-  }>
+  }>,
+  options?: { draftOnlyDocIds?: string[]; stripClientDocIds?: string[] }
 ): Promise<{ upserted: number }> {
   const db = await readDatabase();
   const now = new Date().toISOString();
@@ -210,6 +287,42 @@ export async function bulkUpsertRecords(
       db.records.push(record);
     }
     upserted++;
+  }
+
+  for (const docId of docIds) {
+    const incomingDoc = incomingIds.has(`doc-${docId}`);
+    const incomingQuote = incomingIds.has(`quote-${docId}`);
+    if (incomingDoc) {
+      db.records = db.records.filter((record) => record.id !== `quote-${docId}`);
+    }
+    if (incomingQuote) {
+      db.records = db.records.filter((record) => record.id !== `doc-${docId}`);
+    }
+  }
+
+  if (options?.draftOnlyDocIds?.length) {
+    const draftOnly = new Set(options.draftOnlyDocIds);
+    db.records = db.records.filter((record) => {
+      for (const docId of draftOnly) {
+        if (
+          recordBelongsToDocument(record, docId) &&
+          record.id !== `draft-${docId}`
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  if (options?.stripClientDocIds?.length) {
+    const stripClients = new Set(options.stripClientDocIds);
+    db.records = db.records.filter((record) => {
+      for (const docId of stripClients) {
+        if (record.id === `client-${docId}`) return false;
+      }
+      return true;
+    });
   }
 
   db.lastSyncedAt = now;

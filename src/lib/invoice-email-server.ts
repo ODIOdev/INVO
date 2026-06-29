@@ -4,13 +4,10 @@ import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import type { DraftState } from "@/lib/drafts";
 import {
-  buildInvoicePdfAttachment,
-  INVOICE_PDF_CID,
-} from "@/lib/invoice-email-attachment";
-import {
   generateInvoiceEmailHtml,
   generateInvoicePlainText,
 } from "@/lib/invoice-email-html";
+import { buildInvoicePdfAttachment } from "@/lib/invoice-email-attachment";
 import { buildInvoicePaymentLink } from "@/lib/stripe-checkout";
 
 function getPublicAppUrl(): string {
@@ -66,14 +63,19 @@ export async function buildInvoiceEmailBodies(
   const html = generateInvoiceEmailHtml(state, {
     logoUrl: logo,
     paymentUrl,
-    pdfAttachmentFilename: pdfAttachment.filename,
   });
   const plainText = generateInvoicePlainText(state, {
     paymentUrl,
     pdfAttachmentFilename: pdfAttachment.filename,
   });
 
-  return { html, plainText, paymentUrl, pdfAttachment, subject };
+  return {
+    html,
+    plainText,
+    paymentUrl,
+    pdfAttachment,
+    subject,
+  };
 }
 
 export function hasSmtpConfig(): boolean {
@@ -159,7 +161,6 @@ export async function sendInvoiceViaResend(
         filename: pdfAttachment.filename,
         content: pdfAttachment.content,
         contentType: "application/pdf",
-        contentId: INVOICE_PDF_CID,
       },
     ],
   });
@@ -199,7 +200,6 @@ export async function sendInvoiceViaSmtp(
         content: pdfAttachment.content,
         contentType: "application/pdf",
         contentDisposition: "attachment",
-        cid: INVOICE_PDF_CID,
       },
     ],
     headers: {

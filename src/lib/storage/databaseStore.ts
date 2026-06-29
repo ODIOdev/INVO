@@ -13,6 +13,7 @@ export function emptyDatabase(): DatabaseSchema {
   return {
     version: DB_VERSION,
     records: [],
+    deletedRecords: [],
     lastSyncedAt: null,
   };
 }
@@ -21,6 +22,9 @@ function normalizeDatabase(parsed: DatabaseSchema): DatabaseSchema {
   return {
     version: parsed.version ?? DB_VERSION,
     records: Array.isArray(parsed.records) ? parsed.records : [],
+    deletedRecords: Array.isArray(parsed.deletedRecords)
+      ? parsed.deletedRecords
+      : [],
     lastSyncedAt: parsed.lastSyncedAt ?? null,
   };
 }

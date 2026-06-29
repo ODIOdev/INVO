@@ -12,6 +12,12 @@ export async function POST(request: Request) {
     (r: { binId?: string; data?: unknown }) =>
       r.binId && parseBinId(r.binId) && r.data
   );
+  const draftOnlyDocIds = Array.isArray(body.draftOnlyDocIds)
+    ? body.draftOnlyDocIds.filter((id: unknown) => typeof id === "string")
+    : [];
+  const stripClientDocIds = Array.isArray(body.stripClientDocIds)
+    ? body.stripClientDocIds.filter((id: unknown) => typeof id === "string")
+    : [];
 
   const result = await bulkUpsertRecords(
     valid.map((r: {
@@ -26,7 +32,8 @@ export async function POST(request: Request) {
       data: r.data,
       label: r.label,
       source: r.source ?? "sync",
-    }))
+    })),
+    { draftOnlyDocIds, stripClientDocIds }
   );
 
   return NextResponse.json({

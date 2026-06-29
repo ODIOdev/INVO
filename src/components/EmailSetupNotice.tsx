@@ -46,7 +46,7 @@ export default function EmailSetupNotice() {
         <span className="font-mono">Over Drive OS &lt;admin@overdriveio.com&gt;</span>
         . See{" "}
         <Link href="/admin/settings" className="font-semibold underline">
-          Admin → Settings
+          Dashboard → Settings
         </Link>
         .
       </p>

@@ -1,39 +1,47 @@
+import type { AdminIconName } from "@/lib/admin-icons";
+
 export const DATA_BINS = {
   clients: {
     id: "clients",
     label: "Clients",
     description: "Client names, companies, contact info, and URLs",
-    icon: "👤",
+    icon: "clients" as AdminIconName,
   },
   documents: {
     id: "documents",
-    label: "Quotes & Invoices",
-    description: "Complete quote and invoice documents",
-    icon: "📄",
+    label: "Invoices",
+    description: "Completed invoice documents",
+    icon: "documents" as AdminIconName,
+  },
+  quotes: {
+    id: "quotes",
+    label: "Quotes",
+    description: "Saved quote documents from the invoice app",
+    icon: "quotes" as AdminIconName,
   },
   drafts: {
     id: "drafts",
     label: "Drafts",
     description: "Saved draft states from the invoice editor",
-    icon: "📝",
+    icon: "drafts" as AdminIconName,
   },
   lineItems: {
     id: "lineItems",
     label: "Line Items",
-    description: "Individual service rows from documents",
-    icon: "📋",
+    description: "Service catalog — saved line items and prices",
+    icon: "lineItems" as AdminIconName,
   },
   labor: {
     id: "labor",
     label: "Labor",
     description: "Labor entries — hours, rates, and titles",
-    icon: "⏱",
+    icon: "labor" as AdminIconName,
   },
   notes: {
     id: "notes",
     label: "Notes & Terms",
     description: "Payment terms and project notes",
-    icon: "💬",
+    icon: "notes" as AdminIconName,
   },
 } as const;
 
@@ -49,9 +57,15 @@ export interface StoredRecord {
   updatedAt: string;
 }
 
+export interface DeletedRecord {
+  record: StoredRecord;
+  deletedAt: string;
+}
+
 export interface DatabaseSchema {
   version: number;
   records: StoredRecord[];
+  deletedRecords: DeletedRecord[];
   lastSyncedAt: string | null;
 }
 
@@ -59,7 +73,7 @@ export interface BinSummary {
   binId: DataBinId;
   label: string;
   description: string;
-  icon: string;
+  icon: AdminIconName;
   count: number;
   lastUpdated: string | null;
 }
@@ -85,6 +99,7 @@ export function buildRecordLabel(
         "Unnamed client"
       );
     case "documents":
+    case "quotes":
       return (
         `${data.docType ?? "Document"} — ${data.documentNumber ?? "No number"}`
       );

@@ -138,7 +138,7 @@ export default function InvoiceDocumentPreview({
         <div className="grid gap-6 lg:grid-cols-2">
           {(laborTitle || laborHours || laborRate) && (
             <div className="info-card">
-              <p className="info-card-heading">Labor</p>
+              <p className="info-card-heading">Systems | Applications</p>
               <div className="space-y-3">
                 {laborTitle && (
                   <PreviewField label="Description" value={laborTitle} />

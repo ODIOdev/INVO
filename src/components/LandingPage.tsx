@@ -35,7 +35,7 @@ export default function LandingPage() {
           />
           <div className="flex items-center gap-3">
             <Link href="/admin" className="btn-outline text-xs">
-              Admin
+              Dashboard
             </Link>
             <Link href="/admin/settings" className="btn">
               Settings

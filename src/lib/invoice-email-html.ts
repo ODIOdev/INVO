@@ -46,7 +46,6 @@ function summaryRow(label: string, value: string, bold = false): string {
 export type InvoiceEmailRenderOptions = {
   logoUrl?: string;
   paymentUrl?: string | null;
-  pdfAttachmentFilename?: string | null;
 };
 
 function hrefAttr(url: string): string {
@@ -101,33 +100,6 @@ function paymentCardHtml(
   </table>`;
 }
 
-function pdfDownloadCardHtml(
-  docType: string,
-  docNumber: string,
-  pdfFilename: string
-): string {
-  const label = docType === "Quote" ? "Quote" : "Invoice";
-  return `<table width="100%" cellpadding="0" cellspacing="0" class="email-panel" style="margin:28px 0;border:1px solid #e4e4e7;border-radius:12px;${WHITE_BG}">
-    <tr><td style="padding:24px;text-align:center;${WHITE_BG}">
-      <div class="email-label" style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">Download PDF</div>
-      <div class="email-title" style="font-size:18px;font-weight:600;color:#18181b;line-height:1.3;margin-bottom:6px;">${esc(label)} ${esc(docNumber)}</div>
-      <div class="email-muted" style="font-size:13px;color:#71717a;margin-bottom:20px;">Your PDF is attached to this email</div>
-      <table cellpadding="0" cellspacing="0" align="center" role="presentation" style="margin:0 auto;border-collapse:separate;">
-        <tr>
-          <td align="center" width="240" bgcolor="#18181b" style="background-color:#18181b;border-radius:8px;width:240px;mso-padding-alt:14px 0;">
-            <span style="display:block;padding:14px 32px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;line-height:1.2;text-decoration:none;">
-              Download PDF
-            </span>
-          </td>
-        </tr>
-      </table>
-      <div class="email-muted" style="margin-top:16px;font-size:13px;line-height:1.5;color:#71717a;">
-        Open the attachment: <strong style="color:#18181b;font-weight:600;">${esc(pdfFilename)}</strong>
-      </div>
-    </td></tr>
-  </table>`;
-}
-
 export function generateInvoiceEmailHtml(
   state: DraftState,
   options?: InvoiceEmailRenderOptions | string
@@ -136,7 +108,6 @@ export function generateInvoiceEmailHtml(
     typeof options === "string" ? { logoUrl: options } : (options ?? {});
   const logoDataUrl = renderOptions.logoUrl;
   const paymentUrl = renderOptions.paymentUrl ?? null;
-  const pdfAttachmentFilename = renderOptions.pdfAttachmentFilename ?? null;
   const { docType, client, services, laborTitle, laborHours, laborRate, notes } =
     state;
   const totals = calculateDraftTotals(state);
@@ -165,7 +136,7 @@ export function generateInvoiceEmailHtml(
     ? `<td width="50%" valign="top" style="padding-right:8px;">
         <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e4e4e7;border-radius:8px;background:#fafafa;">
           <tr><td style="padding:16px;">
-            <div style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">Labor</div>
+            <div style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">Systems | Applications</div>
             ${(laborTitle ?? "").trim() ? `<div style="font-size:13px;color:#18181b;margin-bottom:8px;">${esc((laborTitle ?? "").trim())}</div>` : ""}
             <div style="font-size:12px;color:#71717a;">${laborHours || 0} hrs @ ${moneyForEmail(laborRate)}</div>
             <div style="margin-top:12px;font-size:16px;font-weight:700;color:#18181b;text-align:right;">${moneyForEmail(totals.laborTotal)}</div>
@@ -194,14 +165,6 @@ export function generateInvoiceEmailHtml(
           formatDisplayDate(client.dueDate)
         )
       : "";
-
-  const pdfDownloadHtml = pdfAttachmentFilename
-    ? pdfDownloadCardHtml(
-        docType,
-        client.documentNumber || docType,
-        pdfAttachmentFilename
-      )
-    : "";
 
   const notesHtml = (notes ?? "").trim()
     ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
@@ -304,8 +267,6 @@ export function generateInvoiceEmailHtml(
 
           ${notesHtml}
 
-          ${pdfDownloadHtml}
-
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
             <tr><td align="center" class="email-footer" style="font-size:11px;font-weight:500;color:#a1a1aa;letter-spacing:0.04em;">www.overdriveio.com</td></tr>
           </table>
@@ -321,7 +282,10 @@ export function generateInvoiceEmailHtml(
 
 export function generateInvoicePlainText(
   state: DraftState,
-  options?: { paymentUrl?: string | null; pdfAttachmentFilename?: string | null }
+  options?: {
+    paymentUrl?: string | null;
+    pdfAttachmentFilename?: string | null;
+  }
 ): string {
   const { docType, client, notes } = state;
   const totals = calculateDraftTotals(state);
@@ -346,11 +310,7 @@ export function generateInvoicePlainText(
   }
 
   if (options?.pdfAttachmentFilename) {
-    lines.push(
-      "",
-      `PDF attached: ${options.pdfAttachmentFilename}`,
-      "Open the attachment on this email to download your document."
-    );
+    lines.push("", `PDF attached: ${options.pdfAttachmentFilename}`);
   }
 
   lines.push("", "— Over Drive OS", "www.overdriveio.com");

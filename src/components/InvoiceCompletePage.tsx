@@ -79,12 +79,9 @@ export default function InvoiceCompletePage() {
     try {
       const { openPdfForPrint } = await import("@/lib/pdf-export");
       const filename = client.documentNumber || docType;
-      const result = await openPdfForPrint("invoice-preview", filename, state);
+      await openPdfForPrint("invoice-preview", filename, state);
       setToast({
-        message:
-          result === "opened"
-            ? "PDF opened — use Print in the PDF tab (⌘P / Ctrl+P)."
-            : "PDF downloaded — open the file and print from Preview or Adobe Reader.",
+        message: "PDF downloaded — open the file to print.",
         type: "success",
       });
     } catch (error) {
@@ -130,7 +127,7 @@ export default function InvoiceCompletePage() {
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/admin" className="btn-outline text-xs">
-              Admin
+              Dashboard
             </Link>
             <Link href={`/invoice?draft=${draft.id}`} className="btn-outline text-xs">
               Edit Invoice
@@ -150,8 +147,8 @@ export default function InvoiceCompletePage() {
           <p className="mt-2 text-sm text-zinc-600">
             Your quote has been converted to an invoice
             {savedToAdmin
-              ? " and saved to the admin database."
-              : ". Local copy saved; admin sync failed."}
+              ? " and saved to the dashboard."
+              : ". Local copy saved; dashboard sync failed."}
           </p>
           <p className="mt-1 text-sm font-medium text-zinc-800">
             Total due: {formatMoney(balanceDue)}
@@ -181,7 +178,7 @@ export default function InvoiceCompletePage() {
             {isExporting ? "Generating…" : "Download PDF"}
           </button>
           <Link href="/admin" className="btn">
-            View in Admin
+            View in Dashboard
           </Link>
         </div>
       </div>

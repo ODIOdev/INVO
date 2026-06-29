@@ -124,6 +124,39 @@ body {
   background-size: 0.875rem;
 }
 
+.catalog-picker-wrap {
+  @apply relative shrink-0;
+}
+
+.catalog-picker-square {
+  @apply h-9 w-9 cursor-pointer appearance-none rounded border border-zinc-200 bg-zinc-50/50 text-[13px] text-zinc-900 transition hover:border-zinc-300 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M4 6h16M4 12h16M4 18h16'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 0.95rem;
+}
+
+.catalog-picker-table {
+  @apply h-8 w-8 rounded bg-white shadow-sm;
+  background-size: 0.85rem;
+}
+
+.client-autocomplete {
+  @apply relative;
+}
+
+.client-autocomplete-list {
+  @apply absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg;
+}
+
+.client-autocomplete-option {
+  @apply block w-full px-3 py-2 text-left transition hover:bg-zinc-50;
+}
+
+.client-autocomplete-option-active {
+  @apply bg-blue-50 hover:bg-blue-50;
+}
+
 /* ── Line items table ── */
 .line-items {
   @apply w-full border-collapse overflow-hidden rounded-lg border border-zinc-200 text-[13px];
@@ -196,7 +229,486 @@ body {
   @apply mt-3 flex items-baseline justify-between gap-6 border-t border-zinc-200 pt-4;
 }
 
-/* ── Buttons ── */
+/* ── Admin sidebar ── */
+.admin-sidebar {
+  @apply lg:sticky lg:top-[4.75rem] lg:self-start;
+}
+
+/* ── Admin shell ── */
+.admin-header {
+  @apply sticky top-0 z-50 border-b border-black/[0.06] bg-white/95 backdrop-blur-md;
+}
+
+.admin-sidebar-card {
+  @apply overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm;
+}
+
+.admin-sidebar-header {
+  @apply border-b border-zinc-100 px-4 py-3;
+}
+
+.admin-sidebar-footer {
+  @apply space-y-1 border-t border-zinc-100 bg-zinc-50/60 p-2;
+}
+
+.admin-nav-group-label {
+  @apply px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400;
+}
+
+.admin-nav-section-toggle {
+  @apply flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 transition hover:bg-zinc-50 hover:text-zinc-600;
+}
+
+.admin-nav-section-summary {
+  @apply rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-zinc-500;
+}
+
+.admin-nav-chevron {
+  @apply shrink-0 text-base leading-none text-zinc-400 transition-transform duration-200;
+}
+
+.admin-nav-chevron-open {
+  @apply rotate-0;
+}
+
+.admin-nav-chevron:not(.admin-nav-chevron-open) {
+  @apply -rotate-90;
+}
+
+.admin-nav-section-body {
+  @apply grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.admin-nav-section-body-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: 0.375rem;
+}
+
+.admin-nav-section-body > div {
+  @apply overflow-hidden;
+}
+
+.admin-nav-item {
+  @apply flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition;
+}
+
+.admin-nav-item:hover {
+  @apply bg-zinc-50;
+}
+
+.admin-nav-item-active {
+  @apply bg-blue-50 ring-1 ring-inset ring-blue-200;
+}
+
+.admin-nav-item-active:hover {
+  @apply bg-blue-50;
+}
+
+.admin-nav-icon {
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600;
+}
+
+.admin-nav-icon-muted {
+  @apply bg-white text-sm;
+}
+
+.admin-nav-item-active .admin-nav-icon {
+  @apply bg-white;
+}
+
+.admin-nav-badge {
+  @apply shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-zinc-600;
+}
+
+.admin-nav-badge-active {
+  @apply bg-blue-100 text-blue-700;
+}
+
+.admin-sidebar-link {
+  @apply flex items-center gap-3 rounded-lg px-2 py-2.5 transition hover:bg-white;
+}
+
+.admin-sidebar-link-active {
+  @apply bg-white shadow-sm ring-1 ring-zinc-200/80;
+}
+
+.admin-sidebar-card nav {
+  @apply p-3;
+}
+
+/* ── Admin dashboard ── */
+.admin-dash-hero {
+  @apply relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-800 to-blue-950 p-6 shadow-lg;
+}
+
+.admin-dash-hero::before {
+  content: "";
+  @apply pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-blue-500/20 blur-3xl;
+}
+
+.admin-dash-hero-stats {
+  @apply flex w-full min-w-0 flex-col gap-3 sm:flex-row lg:w-auto lg:flex-1 lg:justify-end;
+}
+
+.admin-dash-hero-stat {
+  @apply min-w-0 flex-1 rounded-xl bg-white/10 px-4 py-3 text-left backdrop-blur-sm sm:min-w-[10.5rem] lg:min-w-[11.5rem];
+}
+
+.admin-dash-hero-stat-label {
+  @apply text-[10px] font-semibold uppercase tracking-wide text-blue-100/70;
+}
+
+.admin-dash-hero-stat-value {
+  @apply mt-1 text-left text-xl font-bold tabular-nums leading-tight tracking-tight text-white;
+  font-size: clamp(1.125rem, 1.75vw, 1.5rem);
+}
+
+.admin-dash-card {
+  @apply relative overflow-hidden rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm;
+}
+
+.admin-metric-grid {
+  @apply grid grid-cols-2 gap-3 md:grid-cols-3;
+}
+
+.admin-metric-link {
+  @apply block min-w-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2;
+}
+
+.admin-metric-card {
+  @apply relative flex flex-col overflow-hidden rounded-xl border border-zinc-200/70 bg-gradient-to-br from-white to-zinc-50/90 shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:border-zinc-300/80 group-hover:shadow-md;
+}
+
+.admin-metric-card-amber {
+  @apply from-amber-50/50 to-white group-hover:shadow-amber-100/50;
+}
+
+.admin-metric-card-emerald {
+  @apply from-emerald-50/40 to-white group-hover:shadow-emerald-100/50;
+}
+
+.admin-metric-card-rose {
+  @apply from-rose-50/40 to-white group-hover:shadow-rose-100/50;
+}
+
+.admin-metric-card-blue {
+  @apply from-blue-50/40 to-white group-hover:shadow-blue-100/50;
+}
+
+.admin-metric-card-violet {
+  @apply from-violet-50/40 to-white group-hover:shadow-violet-100/50;
+}
+
+.admin-metric-card-zinc {
+  @apply from-zinc-100/50 to-white group-hover:shadow-zinc-200/50;
+}
+
+.admin-metric-glow {
+  @apply pointer-events-none absolute -right-4 -top-4 h-14 w-14 rounded-full opacity-30 blur-2xl transition-opacity duration-300 group-hover:opacity-50;
+}
+
+.admin-metric-glow-amber {
+  @apply bg-amber-400;
+}
+
+.admin-metric-glow-emerald {
+  @apply bg-emerald-400;
+}
+
+.admin-metric-glow-rose {
+  @apply bg-rose-400;
+}
+
+.admin-metric-glow-blue {
+  @apply bg-blue-400;
+}
+
+.admin-metric-glow-violet {
+  @apply bg-violet-400;
+}
+
+.admin-metric-glow-zinc {
+  @apply bg-zinc-400;
+}
+
+.admin-metric-body {
+  @apply relative z-[1] flex flex-col px-3.5 py-2.5;
+}
+
+.admin-metric-head {
+  @apply flex items-center justify-between gap-2;
+}
+
+.admin-metric-icon {
+  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-black/[0.04];
+}
+
+.admin-metric-icon-amber {
+  @apply bg-white/90 text-amber-600;
+}
+
+.admin-metric-icon-emerald {
+  @apply bg-white/90 text-emerald-600;
+}
+
+.admin-metric-icon-rose {
+  @apply bg-white/90 text-rose-600;
+}
+
+.admin-metric-icon-blue {
+  @apply bg-white/90 text-blue-600;
+}
+
+.admin-metric-icon-violet {
+  @apply bg-white/90 text-violet-600;
+}
+
+.admin-metric-icon-zinc {
+  @apply bg-white/90 text-zinc-600;
+}
+
+.admin-metric-value {
+  @apply mt-1 text-xl font-bold tabular-nums leading-none tracking-tight text-zinc-900;
+}
+
+.admin-metric-label {
+  @apply text-[10px] font-semibold uppercase tracking-[0.07em] text-zinc-500;
+}
+
+.admin-metric-detail {
+  @apply mt-0.5 text-[11px] leading-tight text-zinc-500;
+}
+
+.admin-metric-bar-track {
+  @apply relative z-[1] h-0.5 w-full bg-zinc-100/90;
+}
+
+.admin-metric-bar-fill {
+  @apply h-full transition-all duration-500 ease-out;
+}
+
+.admin-metric-bar-amber {
+  @apply bg-amber-400;
+}
+
+.admin-metric-bar-emerald {
+  @apply bg-emerald-500;
+}
+
+.admin-metric-bar-rose {
+  @apply bg-rose-500;
+}
+
+.admin-metric-bar-blue {
+  @apply bg-blue-500;
+}
+
+.admin-metric-bar-violet {
+  @apply bg-violet-500;
+}
+
+.admin-metric-bar-zinc {
+  @apply bg-zinc-400;
+}
+
+.admin-dash-card-glow {
+  @apply pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-30 blur-2xl;
+}
+
+.admin-dash-card-blue .admin-dash-card-glow {
+  @apply bg-blue-400;
+}
+
+.admin-dash-card-emerald .admin-dash-card-glow {
+  @apply bg-emerald-400;
+}
+
+.admin-dash-card-amber .admin-dash-card-glow {
+  @apply bg-amber-400;
+}
+
+.admin-dash-card-rose .admin-dash-card-glow {
+  @apply bg-rose-400;
+}
+
+.admin-dash-card-violet .admin-dash-card-glow {
+  @apply bg-violet-400;
+}
+
+.admin-dash-card-zinc .admin-dash-card-glow {
+  @apply bg-zinc-400;
+}
+
+.admin-dash-icon {
+  @apply flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600;
+}
+
+.admin-dash-action-icon {
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600;
+}
+
+.admin-dash-label {
+  @apply relative mt-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-400;
+}
+
+.admin-dash-value {
+  @apply relative mt-1 text-3xl font-bold tracking-tight tabular-nums text-zinc-900;
+}
+
+.admin-dash-sublabel {
+  @apply relative mt-1 text-xs text-zinc-500;
+}
+
+.admin-dash-action {
+  @apply flex w-full items-center justify-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-white;
+}
+
+.admin-client-list {
+  @apply space-y-3 p-4 sm:p-5;
+}
+
+.admin-client-list-header {
+  @apply flex items-center justify-between gap-3 px-1;
+}
+
+.admin-client-list-title {
+  @apply text-xs font-semibold uppercase tracking-wide text-zinc-500;
+}
+
+.admin-client-list-count {
+  @apply rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-zinc-600;
+}
+
+.admin-client-row {
+  @apply relative flex w-full items-center gap-3 overflow-hidden rounded-xl border border-zinc-200/80 bg-white p-3 pr-3 text-left shadow-sm transition hover:border-zinc-300 hover:shadow-md sm:gap-4 sm:p-4;
+}
+
+.admin-client-avatar {
+  @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-200/80 text-sm font-semibold tracking-tight text-zinc-600 ring-1 ring-black/[0.04];
+}
+
+.admin-client-profile-preview {
+  @apply flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-200/80 ring-1 ring-black/[0.04];
+}
+
+.admin-client-info {
+  @apply min-w-0 flex-1;
+}
+
+.admin-client-name {
+  @apply block truncate text-sm font-semibold text-zinc-900;
+}
+
+.admin-client-meta {
+  @apply mt-0.5 block truncate text-xs text-zinc-500;
+}
+
+.admin-client-tabs {
+  @apply flex shrink-0 flex-col items-end gap-1.5;
+}
+
+.admin-client-tab {
+  @apply relative inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-semibold tabular-nums leading-none shadow-sm;
+}
+
+.admin-client-tab-open {
+  @apply border-amber-200/80 bg-amber-50 text-amber-800;
+}
+
+.admin-client-tab-open-zero {
+  @apply border-zinc-200 bg-zinc-50 text-zinc-500;
+}
+
+.admin-client-tab-overdue {
+  @apply border-rose-200/80 bg-rose-50 text-rose-700;
+}
+
+.admin-client-chevron {
+  @apply shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-zinc-400;
+}
+
+/* ── Admin settings ── */
+.admin-settings-hero {
+  @apply relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-800 to-blue-950 px-6 py-8 shadow-lg;
+}
+
+.admin-settings-hero-inner {
+  @apply relative z-[1] flex flex-col gap-6;
+}
+
+.admin-settings-hero-stats {
+  @apply grid grid-cols-1 gap-3 sm:grid-cols-3;
+}
+
+.admin-settings-hero-stats .admin-dash-hero-stat {
+  @apply min-w-0 flex-none sm:min-w-0;
+}
+
+.admin-settings-hero::before {
+  content: "";
+  @apply pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-blue-500/20 blur-3xl;
+}
+
+.admin-settings-card {
+  @apply rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm;
+}
+
+.admin-settings-card-header {
+  @apply flex items-start justify-between gap-4;
+}
+
+.admin-settings-status-pill {
+  @apply inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold;
+}
+
+.admin-settings-status-pill-on {
+  @apply bg-emerald-50 text-emerald-700;
+}
+
+.admin-settings-status-pill-off {
+  @apply bg-zinc-100 text-zinc-500;
+}
+
+.admin-settings-env-block {
+  @apply mt-4 rounded-lg border border-zinc-200 bg-zinc-50/80 p-4;
+}
+
+.admin-settings-trash-table {
+  @apply overflow-hidden rounded-lg border border-zinc-200;
+}
+
+.admin-settings-trash-head {
+  @apply grid grid-cols-[minmax(0,1fr)_6.5rem_7rem] gap-3 border-b border-zinc-300 bg-zinc-100 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600 sm:grid-cols-[minmax(0,1fr)_7rem_8rem_6rem];
+}
+
+.admin-settings-trash-row {
+  @apply grid grid-cols-[minmax(0,1fr)_6.5rem_7rem] items-center gap-3 border-b border-zinc-200 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[minmax(0,1fr)_7rem_8rem_6rem];
+}
+
+.admin-settings-trash-foot {
+  @apply flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 bg-zinc-50 px-4 py-3;
+}
+
+.admin-settings-danger {
+  @apply rounded-xl border border-red-200/80 bg-gradient-to-br from-red-50/50 to-white p-5 shadow-sm;
+}
+
+.admin-settings-toast {
+  @apply rounded-lg px-4 py-2.5 text-sm;
+}
+
+.admin-settings-toast-success {
+  @apply bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100;
+}
+
+.admin-settings-toast-error {
+  @apply bg-red-50 text-red-800 ring-1 ring-red-100;
+}
+
 .btn {
   @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-zinc-900 px-4 py-2 text-[13px] font-medium text-white transition hover:bg-zinc-800 disabled:opacity-50;
 }

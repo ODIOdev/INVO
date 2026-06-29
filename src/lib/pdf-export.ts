@@ -1,5 +1,5 @@
 import type { DraftState } from "@/lib/drafts";
-import { generateInvoicePdfBlob } from "@/lib/invoice-pdf";
+import { getInvoicePdfFilename } from "@/lib/invoice-pdf";
 
 function sanitizeFilename(name: string): string {
   const base = name.replace(/[^\w.-]/g, "_").replace(/\.pdf$/i, "");
@@ -18,12 +18,26 @@ function triggerFileDownload(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export async function generatePdfBlob(
-  filename: string,
-  state: DraftState
-): Promise<{ blob: Blob; safeFilename: string }> {
-  const safeFilename = sanitizeFilename(filename);
-  const blob = await generateInvoicePdfBlob(state);
+async function fetchPdfBlob(state: DraftState): Promise<{ blob: Blob; safeFilename: string }> {
+  const response = await fetch("/api/invoice/pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state }),
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "Failed to generate PDF");
+  }
+
+  const blob = await response.blob();
+  const headerFilename = response.headers
+    .get("Content-Disposition")
+    ?.match(/filename="([^"]+)"/)?.[1];
+  const safeFilename = sanitizeFilename(
+    headerFilename || getInvoicePdfFilename(state)
+  );
+
   return { blob, safeFilename };
 }
 
@@ -32,25 +46,15 @@ export async function downloadPdf(
   filename: string,
   state: DraftState
 ): Promise<void> {
-  const { blob, safeFilename } = await generatePdfBlob(filename, state);
-  triggerFileDownload(blob, safeFilename);
+  const { blob, safeFilename } = await fetchPdfBlob(state);
+  triggerFileDownload(blob, filename ? sanitizeFilename(filename) : safeFilename);
 }
 
 export async function openPdfForPrint(
   _elementId: string,
   filename: string,
   state: DraftState
-): Promise<"opened" | "downloaded"> {
-  const { blob, safeFilename } = await generatePdfBlob(filename, state);
-  const url = URL.createObjectURL(blob);
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-
-  if (!opened) {
-    URL.revokeObjectURL(url);
-    triggerFileDownload(blob, safeFilename);
-    return "downloaded";
-  }
-
-  setTimeout(() => URL.revokeObjectURL(url), 120_000);
-  return "opened";
+): Promise<"downloaded"> {
+  await downloadPdf(_elementId, filename, state);
+  return "downloaded";
 }

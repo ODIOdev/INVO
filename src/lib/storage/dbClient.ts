@@ -1,4 +1,5 @@
 import type { DraftState, SavedDraft } from "@/lib/drafts";
+import { isNamedClient } from "@/lib/catalog-clients";
 import { saveDraftToLibrary } from "@/lib/drafts";
 import type { DataBinId, StoredRecord } from "./dataBins";
 
@@ -8,6 +9,7 @@ export interface SyncPayload {
   drafts?: SavedDraft[];
   document?: DraftState & { draftId?: string | null };
   source?: StoredRecord["source"];
+  syncMode?: "draft" | "complete";
 }
 
 export interface SyncResult {
@@ -15,12 +17,46 @@ export interface SyncResult {
   lastSyncedAt: string;
 }
 
-export function draftStateToSyncRecords(
+export function primaryDocBinForDocType(
+  docType: DraftState["docType"]
+): "documents" | "quotes" {
+  return docType === "Quote" ? "quotes" : "documents";
+}
+
+export function draftOnlySyncRecords(
   state: DraftState,
   draftId?: string | null,
   source: StoredRecord["source"] = "sync"
 ) {
   const docId = draftId ?? crypto.randomUUID();
+
+  return [
+    {
+      id: `draft-${docId}`,
+      binId: "drafts" as const,
+      data: {
+        draftId: docId,
+        docType: state.docType,
+        projectName: state.client.projectName,
+        documentNumber: state.client.documentNumber,
+        state,
+      },
+      source,
+    },
+  ];
+}
+
+export function draftStateToSyncRecords(
+  state: DraftState,
+  draftId?: string | null,
+  source: StoredRecord["source"] = "sync",
+  options?: { primaryDocBin?: "documents" | "quotes" }
+) {
+  const docId = draftId ?? crypto.randomUUID();
+  const primaryDocBin =
+    options?.primaryDocBin ?? primaryDocBinForDocType(state.docType);
+  const primaryDocRecordId =
+    primaryDocBin === "quotes" ? `quote-${docId}` : `doc-${docId}`;
   const records: Array<{
     id: string;
     binId: DataBinId;
@@ -29,16 +65,18 @@ export function draftStateToSyncRecords(
     source: StoredRecord["source"];
   }> = [];
 
-  records.push({
-    id: `client-${docId}`,
-    binId: "clients",
-    data: { ...state.client, documentId: docId },
-    source,
-  });
+  if (isNamedClient(state.client)) {
+    records.push({
+      id: `client-${docId}`,
+      binId: "clients",
+      data: { ...state.client, documentId: docId },
+      source,
+    });
+  }
 
   records.push({
-    id: `doc-${docId}`,
-    binId: "documents",
+    id: primaryDocRecordId,
+    binId: primaryDocBin,
     data: {
       docType: state.docType,
       documentNumber: state.client.documentNumber,
@@ -102,30 +140,58 @@ export function draftStateToSyncRecords(
 
 export function savedDraftsToSyncRecords(drafts: SavedDraft[]) {
   return drafts.flatMap((draft) =>
-    draftStateToSyncRecords(draft.state, draft.id)
+    draftOnlySyncRecords(draft.state, draft.id)
   );
 }
 
 export async function syncToInternalDatabase(
   payload: SyncPayload
 ): Promise<SyncResult> {
-  const records = [];
+  const syncMode = payload.syncMode ?? "complete";
+  const records: Array<{
+    id: string;
+    binId: DataBinId;
+    data: Record<string, unknown>;
+    label?: string;
+    source: StoredRecord["source"];
+  }> = [];
+  const draftOnlyDocIds: string[] = [];
+  const stripClientDocIds: string[] = [];
 
   if (payload.drafts?.length) {
     records.push(...savedDraftsToSyncRecords(payload.drafts));
+    for (const draft of payload.drafts) {
+      draftOnlyDocIds.push(draft.id);
+    }
   }
 
   if (payload.document) {
     const { draftId, ...state } = payload.document;
-    records.push(
-      ...draftStateToSyncRecords(state, draftId, payload.source ?? "sync")
-    );
+    const source = payload.source ?? "sync";
+
+    if (syncMode === "draft") {
+      const draftRecords = draftOnlySyncRecords(state, draftId, source);
+      records.push(...draftRecords);
+      draftOnlyDocIds.push(
+        draftId ?? draftRecords[0].id.replace(/^draft-/, "")
+      );
+    } else {
+      const docId = draftId ?? crypto.randomUUID();
+      records.push(
+        ...draftStateToSyncRecords(state, docId, source, {
+          primaryDocBin: primaryDocBinForDocType(state.docType),
+        })
+      );
+      if (!isNamedClient(state.client)) {
+        stripClientDocIds.push(docId);
+      }
+    }
   }
 
   const response = await fetch("/api/storage/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ records }),
+    body: JSON.stringify({ records, draftOnlyDocIds, stripClientDocIds }),
   });
 
   if (!response.ok) {
@@ -226,6 +292,29 @@ export async function finalizeCompletedInvoice(
     await syncToInternalDatabase({
       document: { ...state, draftId: id },
       source: "invoice-app",
+      syncMode: "complete",
+    });
+    return { draftId: id, savedToAdmin: true };
+  } catch {
+    return { draftId: id, savedToAdmin: false };
+  }
+}
+
+export async function finalizeCompletedQuote(
+  state: DraftState,
+  draftId?: string | null
+): Promise<{ draftId: string; savedToAdmin: boolean }> {
+  if (state.docType !== "Quote") {
+    throw new Error("Only quotes can be saved to the Quotes bin.");
+  }
+
+  const id = saveDraftToLibrary(state, draftId);
+
+  try {
+    await syncToInternalDatabase({
+      document: { ...state, draftId: id },
+      source: "invoice-app",
+      syncMode: "complete",
     });
     return { draftId: id, savedToAdmin: true };
   } catch {
@@ -304,6 +393,38 @@ export async function deleteStoredRecord(id: string) {
   });
   if (!response.ok) throw new Error("Failed to delete record");
   return response.json();
+}
+
+export async function fetchDeletedRecords(): Promise<{
+  deleted: import("@/lib/storage/dataBins").DeletedRecord[];
+}> {
+  const response = await fetch("/api/storage/trash", { cache: "no-store" });
+  if (!response.ok) throw new Error("Failed to load deleted records");
+  return response.json();
+}
+
+export async function restoreDeletedRecord(id: string) {
+  const response = await fetch(`/api/storage/trash/${id}`, {
+    method: "POST",
+  });
+  if (!response.ok) throw new Error("Failed to restore record");
+  return response.json();
+}
+
+export async function purgeDeletedRecord(id: string) {
+  const response = await fetch(`/api/storage/trash/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to permanently delete record");
+  return response.json();
+}
+
+export async function purgeAllDeletedRecords() {
+  const response = await fetch("/api/storage/trash", {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to empty trash");
+  return response.json() as Promise<{ removed: number }>;
 }
 
 export async function upsertStorageRecord(input: {

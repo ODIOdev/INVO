@@ -5,6 +5,7 @@ import {
   DATA_BINS,
   type DataBinId,
 } from "@/lib/storage/dataBins";
+import { isNamedClient } from "@/lib/catalog-clients";
 import {
   seedDemoDatabase,
   upsertStorageRecord,
@@ -74,6 +75,16 @@ export default function AdminDemoForm({
             draftId: docId,
           },
         };
+      case "quotes":
+        return {
+          id: `quote-${docId}`,
+          data: {
+            docType: "Quote",
+            documentNumber: form.documentNumber || `QTE-${Date.now().toString().slice(-6)}`,
+            projectName: form.projectName || "Demo project",
+            draftId: docId,
+          },
+        };
       case "lineItems":
         return {
           id: `line-${docId}-0`,
@@ -120,6 +131,17 @@ export default function AdminDemoForm({
         const payload = buildPayload();
         if (!payload) {
           setError("Use Seed Demo Database for full draft records.");
+          return;
+        }
+        if (
+          selectedBin === "clients" &&
+          !isNamedClient({
+            clientName: form.clientName,
+            companyName: form.companyName,
+            email: form.email,
+          })
+        ) {
+          setError("Enter a client name, company, or email before saving.");
           return;
         }
         await upsertStorageRecord({
@@ -198,6 +220,13 @@ export default function AdminDemoForm({
                 <option value="Invoice">Invoice</option>
               </select>
               <input className="field" placeholder="Document number" value={form.documentNumber} onChange={(e) => update("documentNumber", e.target.value)} />
+              <input className="field" placeholder="Project name" value={form.projectName} onChange={(e) => update("projectName", e.target.value)} />
+            </>
+          )}
+
+          {selectedBin === "quotes" && (
+            <>
+              <input className="field" placeholder="Quote number" value={form.documentNumber} onChange={(e) => update("documentNumber", e.target.value)} />
               <input className="field" placeholder="Project name" value={form.projectName} onChange={(e) => update("projectName", e.target.value)} />
             </>
           )}

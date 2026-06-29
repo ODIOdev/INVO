@@ -343,7 +343,7 @@ function drawBottomPanels(
 
   if (hasLabor) {
     let ly = panelTop + 6;
-    ly = sectionLabel(pdf, "Labor", MARGIN + 6, ly);
+    ly = sectionLabel(pdf, "Systems | Applications", MARGIN + 6, ly);
 
     if (state.laborTitle.trim()) {
       pdf.setFont("helvetica", "normal");
@@ -416,6 +416,10 @@ export function getInvoicePdfFilename(state: DraftState): string {
 
 async function buildInvoicePdfDocument(state: DraftState): Promise<jsPDF> {
   const pdf = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
+  pdf.setProperties({
+    title: getInvoicePdfFilename(state),
+    subject: `${state.docType} ${state.client.documentNumber}`,
+  });
   let y = MARGIN;
 
   const logo = await loadLogoBase64();

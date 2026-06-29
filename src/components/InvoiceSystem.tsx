@@ -1,18 +1,21 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import InvoicePaperFooter from "@/components/InvoicePaperFooter";
 import InvoicePaperHeader from "@/components/InvoicePaperHeader";
 import EmailSetupNotice from "@/components/EmailSetupNotice";
+import SmsSetupNotice from "@/components/SmsSetupNotice";
+import CatalogLineItemPicker from "@/components/CatalogLineItemPicker";
+import ClientNameAutocomplete from "@/components/ClientNameAutocomplete";
 import {
   createDefaultState,
   calculateDraftTotals,
   formatMoney as money,
   generateDocumentNumber,
   getDraft,
-  isBlankDraftState,
   normalizeTaxRate,
   saveDraftToLibrary,
   type ClientInfo,
@@ -20,10 +23,23 @@ import {
   type DraftState,
   type ServiceItem,
 } from "@/lib/drafts";
+import {
+  type CatalogLineItem,
+  catalogLineItemsFromRecords,
+} from "@/lib/catalog-line-items";
+import {
+  type CatalogClient,
+  catalogClientsFromRecords,
+  clientFieldsFromCatalog,
+} from "@/lib/catalog-clients";
+import type { StoredRecord } from "@/lib/storage/dataBins";
 import { downloadPdf as exportPdf } from "@/lib/pdf-export";
 import { sendInvoiceEmail } from "@/lib/invoice-email-html";
+import { sendInvoiceSms } from "@/lib/invoice-sms";
 import {
+  fetchBinRecords,
   finalizeCompletedInvoice,
+  finalizeCompletedQuote,
   loadOpenedSubmission,
   syncToInternalDatabase,
 } from "@/lib/storage/dbClient";
@@ -79,13 +95,19 @@ export default function InvoiceSystem() {
   const [toast, setToast] = useState<Toast>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isSendingSms, setIsSendingSms] = useState(false);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
+  const [isSavingQuote, setIsSavingQuote] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [showExitPrompt, setShowExitPrompt] = useState(false);
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null);
   const [emailProductionReady, setEmailProductionReady] = useState<boolean | null>(
     null
   );
+  const [smsConfigured, setSmsConfigured] = useState<boolean | null>(null);
+  const [catalogItems, setCatalogItems] = useState<CatalogLineItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogClients, setCatalogClients] = useState<CatalogClient[]>([]);
 
   const {
     docType,
@@ -105,6 +127,35 @@ export default function InvoiceSystem() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    let active = true;
+
+    fetchBinRecords("lineItems")
+      .then((data: { records?: StoredRecord[] }) => {
+        if (!active) return;
+        setCatalogItems(catalogLineItemsFromRecords(data.records ?? []));
+      })
+      .catch(() => {
+        if (active) setCatalogItems([]);
+      })
+      .finally(() => {
+        if (active) setCatalogLoading(false);
+      });
+
+    fetchBinRecords("clients")
+      .then((data: { records?: StoredRecord[] }) => {
+        if (!active) return;
+        setCatalogClients(catalogClientsFromRecords(data.records ?? []));
+      })
+      .catch(() => {
+        if (active) setCatalogClients([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const {
     serviceSubtotal,
     laborTotal,
@@ -114,12 +165,21 @@ export default function InvoiceSystem() {
     balanceDue,
   } = useMemo(() => calculateDraftTotals(state), [state]);
   const displayTotal = docType === "Invoice" ? balanceDue : grandTotal;
-  const isBlankInvoice = !currentDraftId && isBlankDraftState(state);
 
   const updateClient = (field: keyof ClientInfo, value: string) => {
     setState((prev) => ({
       ...prev,
       client: { ...prev.client, [field]: value },
+    }));
+  };
+
+  const applyCatalogClient = (catalog: CatalogClient) => {
+    setState((prev) => ({
+      ...prev,
+      client: {
+        ...prev.client,
+        ...clientFieldsFromCatalog(catalog),
+      },
     }));
   };
 
@@ -162,6 +222,71 @@ export default function InvoiceSystem() {
     }));
   };
 
+  const applyCatalogToService = (
+    serviceId: number,
+    catalog: CatalogLineItem
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      services: prev.services.map((item) =>
+        item.id === serviceId
+          ? {
+              ...item,
+              service: catalog.service,
+              description: catalog.description,
+              quantity: catalog.quantity,
+              unitPrice: catalog.unitPrice,
+            }
+          : item
+      ),
+    }));
+  };
+
+  const addServiceFromCatalog = (catalog: CatalogLineItem) => {
+    setState((prev) => {
+      const catalogFields = {
+        service: catalog.service,
+        description: catalog.description,
+        quantity: catalog.quantity,
+        unitPrice: catalog.unitPrice,
+      };
+
+      const isBlankRow = (item: ServiceItem) =>
+        !item.service.trim() &&
+        !item.description.trim() &&
+        item.unitPrice === 0;
+
+      const first = prev.services[0];
+      const shouldFillFirst =
+        prev.services.length === 0 ||
+        (prev.services.length === 1 && first && isBlankRow(first));
+
+      if (shouldFillFirst && first) {
+        return {
+          ...prev,
+          services: prev.services.map((item) =>
+            item.id === first.id ? { ...item, ...catalogFields } : item
+          ),
+        };
+      }
+
+      if (prev.services.length === 0) {
+        return {
+          ...prev,
+          services: [{ id: Date.now(), ...catalogFields }],
+        };
+      }
+
+      return {
+        ...prev,
+        services: [
+          ...prev.services,
+          { id: Date.now(), ...catalogFields },
+        ],
+      };
+    });
+  };
+
   const handleDocTypeChange = (next: DocType) => {
     setState((prev) => ({
       ...prev,
@@ -173,21 +298,25 @@ export default function InvoiceSystem() {
     }));
   };
 
+  const goToDashboard = () => router.push("/admin");
+
   const syncCurrentToDatabase = async (draftId: string | null) => {
     try {
       await syncToInternalDatabase({
         document: { ...state, draftId },
+        source: "invoice-app",
+        syncMode: "draft",
       });
     } catch {
       // silent — local draft still saved
     }
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     const id = saveDraftToLibrary(state, currentDraftId);
     setCurrentDraftId(id);
-    syncCurrentToDatabase(id);
-    setToast({ message: "Draft saved successfully", type: "success" });
+    await syncCurrentToDatabase(id);
+    goToDashboard();
   };
 
   const handleDownloadPdf = async () => {
@@ -219,6 +348,15 @@ export default function InvoiceSystem() {
       .catch(() => {
         setEmailConfigured(false);
         setEmailProductionReady(false);
+      });
+
+    fetch("/api/sms/status", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data: { configured?: boolean }) => {
+        setSmsConfigured(Boolean(data.configured));
+      })
+      .catch(() => {
+        setSmsConfigured(false);
       });
   }, []);
 
@@ -269,6 +407,53 @@ export default function InvoiceSystem() {
     }
   };
 
+  const handleSms = async () => {
+    const recipient = formatPhoneNumber(client.phone ?? "");
+    if (!recipient) {
+      setToast({
+        message: "Enter a client phone number to send SMS",
+        type: "error",
+      });
+      return;
+    }
+
+    if (smsConfigured === false) {
+      setToast({
+        message:
+          "Add TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER in Vercel — see the setup banner below",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsSendingSms(true);
+    try {
+      const result = await sendInvoiceSms(state);
+      if (docType === "Quote") {
+        setToast({
+          message: `Quote texted to ${recipient}`,
+          type: "success",
+        });
+      } else {
+        setToast({
+          message: result.paymentIncluded
+            ? `Invoice texted to ${recipient} with Stripe payment link`
+            : `Invoice texted to ${recipient}`,
+          type: "success",
+        });
+      }
+    } catch (error) {
+      console.error("SMS send failed:", error);
+      setToast({
+        message:
+          error instanceof Error ? error.message : "Failed to send SMS",
+        type: "error",
+      });
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
+
   const handleGenerateInvoice = async () => {
     if (state.docType !== "Invoice") return;
 
@@ -280,16 +465,46 @@ export default function InvoiceSystem() {
       );
       setCurrentDraftId(draftId);
 
+      if (savedToAdmin) {
+        goToDashboard();
+        return;
+      }
+
       setToast({
-        message: savedToAdmin
-          ? `Invoice ${state.client.documentNumber} saved to admin`
-          : "Invoice saved locally — cloud sync failed",
-        type: savedToAdmin ? "success" : "error",
+        message: "Invoice saved locally — cloud sync failed",
+        type: "error",
       });
     } catch {
-      setToast({ message: "Failed to save invoice to admin", type: "error" });
+      setToast({ message: "Failed to save invoice to dashboard", type: "error" });
     } finally {
       setIsGeneratingInvoice(false);
+    }
+  };
+
+  const handleSaveToQuotes = async () => {
+    if (state.docType !== "Quote") return;
+
+    setIsSavingQuote(true);
+    try {
+      const { draftId, savedToAdmin } = await finalizeCompletedQuote(
+        state,
+        currentDraftId
+      );
+      setCurrentDraftId(draftId);
+
+      if (savedToAdmin) {
+        goToDashboard();
+        return;
+      }
+
+      setToast({
+        message: "Quote saved locally — cloud sync failed",
+        type: "error",
+      });
+    } catch {
+      setToast({ message: "Failed to save quote to dashboard", type: "error" });
+    } finally {
+      setIsSavingQuote(false);
     }
   };
 
@@ -310,9 +525,15 @@ export default function InvoiceSystem() {
         currentDraftId
       );
 
-      const params = new URLSearchParams({ draft: draftId });
-      if (!savedToAdmin) params.set("sync", "failed");
-      router.push(`/invoice/complete?${params.toString()}`);
+      if (!savedToAdmin) {
+        setToast({
+          message: "Invoice saved locally — cloud sync failed",
+          type: "error",
+        });
+        return;
+      }
+
+      goToDashboard();
     } catch {
       setToast({ message: "Failed to convert invoice", type: "error" });
     } finally {
@@ -326,11 +547,11 @@ export default function InvoiceSystem() {
     setToast({ message: "Form cleared", type: "success" });
   };
 
-  const handleExitSave = () => {
+  const handleExitSave = async () => {
     const id = saveDraftToLibrary(state, currentDraftId);
-    syncCurrentToDatabase(id);
+    await syncCurrentToDatabase(id);
     setShowExitPrompt(false);
-    router.push("/");
+    goToDashboard();
   };
 
   const handleExitDiscard = () => {
@@ -359,17 +580,22 @@ export default function InvoiceSystem() {
             />
           </button>
 
-          <div className="segmented">
-            {(["Quote", "Invoice"] as DocType[]).map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => handleDocTypeChange(type)}
-                className={`segmented-btn ${docType === type ? "segmented-btn-active" : ""}`}
-              >
-                {type}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="segmented">
+              {(["Quote", "Invoice"] as DocType[]).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => handleDocTypeChange(type)}
+                  className={`segmented-btn ${docType === type ? "segmented-btn-active" : ""}`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+            <Link href="/admin" className="btn-outline text-xs">
+              Dashboard
+            </Link>
           </div>
         </div>
       </nav>
@@ -391,11 +617,11 @@ export default function InvoiceSystem() {
                 <p className="doc-heading mb-4">Bill To</p>
                 <div className="space-y-3">
                   <Field label="Name">
-                    <input
-                      className="field"
-                      placeholder="Client name"
+                    <ClientNameAutocomplete
+                      clients={catalogClients}
                       value={client.clientName}
-                      onChange={(e) => updateClient("clientName", e.target.value)}
+                      onChange={(value) => updateClient("clientName", value)}
+                      onSelect={applyCatalogClient}
                     />
                   </Field>
                   <Field label="Company">
@@ -503,11 +729,18 @@ export default function InvoiceSystem() {
 
             {/* Services */}
             <div>
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex items-center justify-between gap-3">
                 <p className="doc-heading">Line Items</p>
-                <button type="button" onClick={addService} className="btn-add no-print">
-                  + Add line item
-                </button>
+                <div className="flex items-center gap-2 no-print">
+                  <CatalogLineItemPicker
+                    items={catalogItems}
+                    loading={catalogLoading}
+                    onSelect={addServiceFromCatalog}
+                  />
+                  <button type="button" onClick={addService} className="btn-add">
+                    + Add line item
+                  </button>
+                </div>
               </div>
 
               <div className="hidden md:block">
@@ -526,14 +759,24 @@ export default function InvoiceSystem() {
                     {services.map((item) => (
                       <tr key={item.id}>
                         <td>
-                          <input
-                            className="field-table"
-                            placeholder="Service"
-                            value={item.service}
-                            onChange={(e) =>
-                              updateService(item.id, "service", e.target.value)
-                            }
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <CatalogLineItemPicker
+                              variant="table"
+                              items={catalogItems}
+                              loading={catalogLoading}
+                              onSelect={(catalog) =>
+                                applyCatalogToService(item.id, catalog)
+                              }
+                            />
+                            <input
+                              className="field-table min-w-0 flex-1"
+                              placeholder="Service"
+                              value={item.service}
+                              onChange={(e) =>
+                                updateService(item.id, "service", e.target.value)
+                              }
+                            />
+                          </div>
                         </td>
                         <td>
                           <input
@@ -599,13 +842,22 @@ export default function InvoiceSystem() {
                     }`}
                   >
                     <Field label="Item">
-                      <input
-                        className="field"
-                        value={item.service}
-                        onChange={(e) =>
-                          updateService(item.id, "service", e.target.value)
-                        }
-                      />
+                      <div className="flex items-center gap-2">
+                        <CatalogLineItemPicker
+                          items={catalogItems}
+                          loading={catalogLoading}
+                          onSelect={(catalog) =>
+                            applyCatalogToService(item.id, catalog)
+                          }
+                        />
+                        <input
+                          className="field min-w-0 flex-1"
+                          value={item.service}
+                          onChange={(e) =>
+                            updateService(item.id, "service", e.target.value)
+                          }
+                        />
+                      </div>
                     </Field>
                     <Field label="Description">
                       <input
@@ -663,7 +915,7 @@ export default function InvoiceSystem() {
             {/* Labor + Totals */}
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="info-card">
-                <p className="info-card-heading">Labor</p>
+                <p className="info-card-heading">Systems | Applications</p>
                 <div className="space-y-3">
                   <Field label="Description">
                     <input
@@ -788,6 +1040,12 @@ export default function InvoiceSystem() {
           </div>
         )}
 
+        {smsConfigured === false && (
+          <div className="mx-auto mt-4 max-w-[816px]">
+            <SmsSetupNotice />
+          </div>
+        )}
+
         {/* Actions — outside PDF */}
         <div className="action-bar">
           <button type="button" onClick={handleClearForm} className="btn-outline">
@@ -796,16 +1054,14 @@ export default function InvoiceSystem() {
           <button type="button" onClick={handleSaveDraft} className="btn-outline">
             Save Draft
           </button>
-          {!isBlankInvoice && (
-            <button
-              type="button"
-              onClick={handleDownloadPdf}
-              disabled={isExporting}
-              className="btn-outline"
-            >
-              {isExporting ? "Generating…" : "Download PDF"}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={isExporting}
+            className="btn-outline"
+          >
+            {isExporting ? "Generating…" : "Download PDF"}
+          </button>
           <button
             type="button"
             onClick={handleSend}
@@ -814,6 +1070,24 @@ export default function InvoiceSystem() {
           >
             {isSendingEmail ? "Sending…" : "Email"}
           </button>
+          <button
+            type="button"
+            onClick={handleSms}
+            disabled={isSendingSms}
+            className="btn-outline"
+          >
+            {isSendingSms ? "Sending…" : "SMS"}
+          </button>
+          {docType === "Quote" && (
+            <button
+              type="button"
+              onClick={handleSaveToQuotes}
+              disabled={isSavingQuote}
+              className="btn"
+            >
+              {isSavingQuote ? "Saving…" : "Save to Quotes"}
+            </button>
+          )}
           {docType === "Invoice" && (
             <button
               type="button"
