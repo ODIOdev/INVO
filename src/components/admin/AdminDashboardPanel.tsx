@@ -2,15 +2,18 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import AdminBalanceBreakdownCard from "@/components/admin/AdminBalanceBreakdownCard";
 import AdminClientOnboardModal from "@/components/admin/AdminClientOnboardModal";
 import { formatMoney } from "@/lib/drafts";
-import type { AdminDashboardStats } from "@/lib/admin-dashboard";
+import type { AdminDashboardActivity, AdminDashboardStats } from "@/lib/admin-dashboard";
 import { activityIconName, type AdminIconName } from "@/lib/admin-icons";
+import type { DataBinId } from "@/lib/storage/dataBins";
 import AdminIcon from "@/components/admin/AdminIcons";
 
 type AdminDashboardPanelProps = {
   stats: AdminDashboardStats;
   onClientSaved?: () => void | Promise<void>;
+  onSelectBin: (binId: DataBinId) => void;
 };
 
 function MetricCard({
@@ -99,115 +102,6 @@ function QuickAction({
   );
 }
 
-function InvoiceBreakdownDonut({
-  open,
-  closed,
-  overdue,
-}: {
-  open: number;
-  closed: number;
-  overdue: number;
-}) {
-  const openNotOverdue = Math.max(open - overdue, 0);
-  const total = open + closed;
-
-  const segments = [
-    { label: "Closed", value: closed, color: "#10b981" },
-    { label: "Open", value: openNotOverdue, color: "#fbbf24" },
-    { label: "Overdue", value: overdue, color: "#f43f5e" },
-  ].filter((segment) => segment.value > 0);
-
-  const size = 168;
-  const strokeWidth = 22;
-  const radius = (size - strokeWidth) / 2 - 4;
-  const cx = size / 2;
-  const cy = size / 2;
-  const circumference = 2 * Math.PI * radius;
-
-  let cumulative = 0;
-  const arcs =
-    total > 0
-      ? segments.map((segment) => {
-          const length = (segment.value / total) * circumference;
-          const rotation = (cumulative / total) * 360 - 90;
-          cumulative += segment.value;
-
-          return (
-            <circle
-              key={segment.label}
-              cx={cx}
-              cy={cy}
-              r={radius}
-              fill="none"
-              stroke={segment.color}
-              strokeWidth={strokeWidth}
-              strokeDasharray={`${length} ${circumference}`}
-              transform={`rotate(${rotation} ${cx} ${cy})`}
-            />
-          );
-        })
-      : null;
-
-  const legend = [
-    { label: "Open", value: open, color: "#fbbf24" },
-    { label: "Closed", value: closed, color: "#10b981" },
-    { label: "Overdue", value: overdue, color: "#f43f5e" },
-  ];
-
-  return (
-    <div className="mt-12 flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center">
-      <div
-        className="relative shrink-0"
-        style={{ width: size, height: size }}
-        role="img"
-        aria-label={`Invoice breakdown: ${open} open, ${closed} closed, ${overdue} overdue`}
-      >
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
-          <circle
-            cx={cx}
-            cy={cy}
-            r={radius}
-            fill="none"
-            stroke="#f4f4f5"
-            strokeWidth={strokeWidth}
-          />
-          {arcs}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold tabular-nums text-zinc-900">{total}</span>
-          <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-            {total === 1 ? "Invoice" : "Invoices"}
-          </span>
-        </div>
-      </div>
-
-      <ul className="grid w-full min-w-[148px] gap-3 sm:w-auto">
-        {legend.map((item) => {
-          const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
-
-          return (
-            <li key={item.label} className="flex items-center justify-between gap-4 text-xs">
-              <span className="flex items-center gap-2 font-medium text-zinc-600">
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                />
-                {item.label}
-              </span>
-              <span className="flex items-baseline gap-1.5 tabular-nums">
-                <span className="font-semibold text-zinc-900">{item.value}</span>
-                {total > 0 ? (
-                  <span className="text-zinc-400">{pct}%</span>
-                ) : null}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
 function formatActivityDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
@@ -217,9 +111,32 @@ function formatActivityDate(iso: string): string {
   });
 }
 
+function activityStatusTextClass(
+  status: NonNullable<AdminDashboardActivity["status"]>
+): string {
+  switch (status) {
+    case "Open":
+      return "text-amber-700";
+    case "Closed":
+      return "text-emerald-700";
+    case "Overdue":
+      return "text-rose-700";
+    case "Quote":
+      return "text-blue-700";
+    case "Draft":
+      return "text-zinc-500";
+    default:
+      return "text-zinc-600";
+  }
+}
+
+const ACTIVITY_SHEET_GRID =
+  "admin-sheet-grid grid grid-cols-[3.25rem_minmax(8rem,1fr)_minmax(10rem,1.4fr)_5.5rem_6.75rem_7.25rem] items-center";
+
 export default function AdminDashboardPanel({
   stats,
   onClientSaved,
+  onSelectBin,
 }: AdminDashboardPanelProps) {
   const invoiceTotal = stats.openInvoices + stats.closedInvoices;
   const [clientModalOpen, setClientModalOpen] = useState(false);
@@ -269,7 +186,7 @@ export default function AdminDashboardPanel({
           label="Open"
           value={String(stats.openInvoices)}
           detail={`${formatMoney(stats.outstandingBalance)} due`}
-          href="/admin?view=documents"
+          href="/admin?view=documents&from=dashboard"
           barValue={stats.openInvoices}
           barMax={invoiceTotal}
         />
@@ -278,8 +195,8 @@ export default function AdminDashboardPanel({
           icon="check-circle"
           label="Closed"
           value={String(stats.closedInvoices)}
-          detail={`${formatMoney(stats.collectedDeposits)} deposits`}
-          href="/admin?view=documents"
+          detail={formatMoney(stats.closedBalance)}
+          href="/admin?view=documents&from=dashboard"
           barValue={stats.closedInvoices}
           barMax={invoiceTotal}
         />
@@ -289,7 +206,7 @@ export default function AdminDashboardPanel({
           label="Overdue"
           value={String(stats.overdueInvoices)}
           detail="Past due w/ balance"
-          href="/admin?view=documents"
+          href="/admin?view=documents&from=dashboard"
           barValue={stats.overdueInvoices}
           barMax={Math.max(stats.openInvoices, 1)}
         />
@@ -299,7 +216,7 @@ export default function AdminDashboardPanel({
           label="Quotes"
           value={String(stats.totalQuotes)}
           detail={formatMoney(stats.quotePipeline)}
-          href="/admin?view=quotes"
+          href="/admin?view=quotes&from=dashboard"
           barValue={stats.totalQuotes}
           barMax={Math.max(stats.totalQuotes, stats.totalInvoices, 1)}
         />
@@ -309,7 +226,7 @@ export default function AdminDashboardPanel({
           label="New clients"
           value={String(stats.newClients)}
           detail={`${stats.totalClients} total`}
-          href="/admin?view=clients"
+          href="/admin?view=clients&from=dashboard"
           barValue={stats.newClients}
           barMax={Math.max(stats.totalClients, 1)}
         />
@@ -319,24 +236,27 @@ export default function AdminDashboardPanel({
           label="Drafts"
           value={String(stats.activeDrafts)}
           detail={`${stats.totalInvoices} invoices`}
-          href="/admin?view=drafts"
+          href="/admin?view=drafts&from=dashboard"
           barValue={stats.activeDrafts}
           barMax={Math.max(stats.activeDrafts, 1)}
         />
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <article className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-zinc-900">Invoice breakdown</h3>
-          <p className="mt-1 text-xs text-zinc-500">
-            Open vs closed across {invoiceTotal || "no"} tracked invoices
-          </p>
-          <InvoiceBreakdownDonut
-            open={stats.openInvoices}
-            closed={stats.closedInvoices}
-            overdue={stats.overdueInvoices}
-          />
-        </article>
+        <AdminBalanceBreakdownCard
+          title="Dashboard balances"
+          subtitle={`Invoice status across ${invoiceTotal || "no"} tracked invoice${invoiceTotal === 1 ? "" : "s"}`}
+          open={stats.openInvoices}
+          closed={stats.closedInvoices}
+          overdue={stats.overdueInvoices}
+          amounts={{
+            open: stats.openBalance,
+            closed: stats.closedBalance,
+            overdue: stats.overdueBalance,
+          }}
+          footerLabel="Total open invoices"
+          footerAmount={stats.openBalance}
+        />
 
         <article className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-zinc-900">Quick actions</h3>
@@ -353,14 +273,14 @@ export default function AdminDashboardPanel({
               onClick={() => setClientModalOpen(true)}
             />
             <QuickAction
-              href="/admin?view=quotes"
-              icon="quotes"
-              label="Browse quotes"
+              icon="lineItems"
+              label="Add line item"
+              onClick={() => onSelectBin("lineItems")}
             />
             <QuickAction
-              href="/admin?view=clients"
-              icon="clients"
-              label="View clients"
+              icon="labor"
+              label="Add Systems cost"
+              onClick={() => onSelectBin("labor")}
             />
           </div>
         </article>
@@ -378,36 +298,66 @@ export default function AdminDashboardPanel({
             No activity yet — create a quote or invoice to get started.
           </p>
         ) : (
-          <ul className="divide-y divide-zinc-100">
+          <div className="admin-sheet">
+            <div className={`${ACTIVITY_SHEET_GRID} admin-sheet-head`}>
+              <div className="admin-sheet-cell admin-sheet-cell-head" aria-hidden />
+              <div className="admin-sheet-cell admin-sheet-cell-head">Record</div>
+              <div className="admin-sheet-cell admin-sheet-cell-head">Details</div>
+              <div className="admin-sheet-cell admin-sheet-cell-head">Status</div>
+              <div className="admin-sheet-cell admin-sheet-cell-head text-right">
+                Amount
+              </div>
+              <div className="admin-sheet-cell admin-sheet-cell-head text-right">
+                Updated
+              </div>
+            </div>
             {stats.recentActivity.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center justify-between gap-4 px-5 py-3.5"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="admin-dash-action-icon">
-                    <AdminIcon
-                      name={activityIconName(item.type)}
-                      size={16}
-                    />
+              <div key={item.id} className={`${ACTIVITY_SHEET_GRID} admin-sheet-row`}>
+                <div
+                  className="admin-sheet-cell flex items-center justify-center"
+                  title={item.type}
+                >
+                  <span className="admin-sheet-type-icon">
+                    <AdminIcon name={activityIconName(item.type)} size={14} />
                   </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-zinc-900">
-                      {item.label}
-                    </p>
-                    <p className="mt-0.5 text-xs text-zinc-400">
-                      {item.type} · {formatActivityDate(item.date)}
-                    </p>
-                  </div>
                 </div>
-                {item.amount !== null && (
-                  <p className="shrink-0 text-sm font-semibold tabular-nums text-zinc-800">
-                    {formatMoney(item.amount)}
-                  </p>
-                )}
-              </li>
+                <div className="admin-sheet-cell truncate font-medium text-zinc-900">
+                  {item.label}
+                </div>
+                <div className="admin-sheet-cell truncate text-zinc-600">
+                  {item.metaLine}
+                </div>
+                <div
+                  className={`admin-sheet-cell truncate text-xs font-medium uppercase tracking-wide ${
+                    item.status
+                      ? activityStatusTextClass(item.status)
+                      : "text-zinc-400"
+                  }`}
+                >
+                  {item.status ?? "—"}
+                </div>
+                <div className="admin-sheet-cell text-right tabular-nums">
+                  {item.amount !== null ? (
+                    <>
+                      <span className="font-medium text-zinc-900">
+                        {formatMoney(item.amount)}
+                      </span>
+                      {item.amountLabel ? (
+                        <span className="mt-0.5 block text-[10px] font-normal normal-case tracking-normal text-zinc-400">
+                          {item.amountLabel}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span className="text-zinc-300">—</span>
+                  )}
+                </div>
+                <div className="admin-sheet-cell text-right text-xs tabular-nums text-zinc-500">
+                  {formatActivityDate(item.date)}
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
     </div>

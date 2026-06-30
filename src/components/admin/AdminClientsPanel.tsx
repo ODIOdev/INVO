@@ -8,7 +8,7 @@ import {
   clientCatalogFromRecord,
   computeClientBalanceStats,
 } from "@/lib/client-balances";
-import { isNamedClientRecord } from "@/lib/catalog-clients";
+import { isDirectoryClientRecord } from "@/lib/catalog-clients";
 import { formatMoney } from "@/lib/drafts";
 import type { StoredRecord } from "@/lib/storage/dataBins";
 import { fetchBinRecords } from "@/lib/storage/dbClient";
@@ -48,25 +48,34 @@ export default function AdminClientsPanel({
   const [selectedClient, setSelectedClient] = useState<StoredRecord | null>(
     null
   );
-  const [draftRecords, setDraftRecords] = useState<StoredRecord[]>([]);
+  const [documentRecords, setDocumentRecords] = useState<StoredRecord[]>([]);
 
-  const loadDrafts = useCallback(async () => {
+  const loadDocumentRecords = useCallback(async () => {
     try {
-      const data = await fetchBinRecords("drafts");
-      setDraftRecords(data.records ?? []);
+      const [drafts, documents, quotes] = await Promise.all([
+        fetchBinRecords("drafts"),
+        fetchBinRecords("documents"),
+        fetchBinRecords("quotes"),
+      ]);
+
+      setDocumentRecords([
+        ...(drafts.records ?? []),
+        ...(documents.records ?? []),
+        ...(quotes.records ?? []),
+      ]);
     } catch {
-      setDraftRecords([]);
+      setDocumentRecords([]);
     }
   }, []);
 
   useEffect(() => {
-    void loadDrafts();
-  }, [loadDrafts, records]);
+    void loadDocumentRecords();
+  }, [loadDocumentRecords, records]);
 
   const sortedRecords = useMemo(
     () =>
       [...records]
-        .filter(isNamedClientRecord)
+        .filter(isDirectoryClientRecord)
         .sort(
           (a, b) =>
             new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -76,7 +85,7 @@ export default function AdminClientsPanel({
 
   const handleRefresh = async () => {
     await onRefresh();
-    await loadDrafts();
+    await loadDocumentRecords();
   };
 
   if (loading) {
@@ -103,10 +112,11 @@ export default function AdminClientsPanel({
     <>
       <AdminClientDetailModal
         client={selectedClient}
-        draftRecords={draftRecords}
+        documentRecords={documentRecords}
         onClose={() => setSelectedClient(null)}
         onSaved={handleRefresh}
         onDeleted={handleRefresh}
+        onDocumentsChanged={handleRefresh}
       />
 
       <div className="admin-client-list">
@@ -120,7 +130,11 @@ export default function AdminClientsPanel({
         <ul className="space-y-2">
           {sortedRecords.map((record) => {
             const catalog = clientCatalogFromRecord(record);
-            const balances = computeClientBalanceStats(catalog, draftRecords);
+            const balances = computeClientBalanceStats(
+              catalog,
+              documentRecords,
+              record
+            );
             const hasOpenBalance = balances.openBalance > 0.01;
             const hasOverdue = balances.overdueBalance > 0.01;
 

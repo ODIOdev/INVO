@@ -4,29 +4,37 @@ import { useEffect, useMemo, useState } from "react";
 import AdminClientProfileUpload, {
   AdminClientAvatar,
 } from "@/components/admin/AdminClientProfileUpload";
+import AdminClientAddressCard from "@/components/admin/AdminClientAddressCard";
+import AdminBalanceBreakdownCard from "@/components/admin/AdminBalanceBreakdownCard";
+import AdminDocumentDetailModal from "@/components/admin/AdminDocumentDetailModal";
+import AdminInvoicePaymentPanel from "@/components/admin/AdminInvoicePaymentPanel";
 import AdminIcon from "@/components/admin/AdminIcons";
 import {
   clientCatalogFromRecord,
   computeClientBalanceStats,
   getClientDocuments,
+  resolveClientDocumentRecord,
   type ClientBalanceStats,
   type ClientDocumentRow,
 } from "@/lib/client-balances";
 import {
   EMPTY_CLIENT_FORM,
+  formatClientAddress,
   formatPhoneNumber,
+  hasClientAddress,
   type ClientFormData,
 } from "@/lib/client-form";
 import { formatMoney } from "@/lib/drafts";
 import type { StoredRecord } from "@/lib/storage/dataBins";
-import { deleteStoredRecord, upsertStorageRecord } from "@/lib/storage/dbClient";
+import { deleteStoredRecord, fetchRecordById, upsertStorageRecord } from "@/lib/storage/dbClient";
 
 type AdminClientDetailModalProps = {
   client: StoredRecord | null;
-  draftRecords: StoredRecord[];
+  documentRecords: StoredRecord[];
   onClose: () => void;
   onSaved: () => void | Promise<void>;
   onDeleted: () => void | Promise<void>;
+  onDocumentsChanged?: () => void | Promise<void>;
 };
 
 function catalogToForm(record: StoredRecord): ClientFormData {
@@ -38,6 +46,11 @@ function catalogToForm(record: StoredRecord): ClientFormData {
     phone: catalog.phone,
     url: catalog.url,
     profileImage: catalog.profileImage,
+    addressLine1: catalog.addressLine1,
+    addressLine2: catalog.addressLine2,
+    city: catalog.city,
+    state: catalog.state,
+    zipCode: catalog.zipCode,
   };
 }
 
@@ -67,15 +80,27 @@ function statusClass(status: ClientDocumentRow["status"]): string {
       return "text-emerald-700";
     case "Overdue":
       return "text-rose-700";
-    default:
+    case "Draft":
+      return "text-zinc-500";
+    case "Quote":
       return "text-blue-700";
+    default:
+      return "text-zinc-600";
   }
 }
 
 const DOC_GRID =
   "grid grid-cols-[4.5rem_5.5rem_minmax(0,1fr)_5.5rem_4.5rem_4.5rem] gap-2";
 
-function ClientDocumentsTable({ documents }: { documents: ClientDocumentRow[] }) {
+function ClientDocumentsTable({
+  documents,
+  onSelectDocument,
+  openingDocumentId,
+}: {
+  documents: ClientDocumentRow[];
+  onSelectDocument: (doc: ClientDocumentRow) => void | Promise<void>;
+  openingDocumentId: string | null;
+}) {
   return (
     <div className="overflow-hidden rounded-md border border-zinc-200">
       <div
@@ -88,16 +113,19 @@ function ClientDocumentsTable({ documents }: { documents: ClientDocumentRow[] })
         <span className="text-right">Amount</span>
         <span className="text-right">Status</span>
       </div>
-      <div className="max-h-52 overflow-y-auto">
+      <div className="max-h-72 overflow-y-auto">
         {documents.length === 0 ? (
           <p className="bg-white px-3 py-6 text-center text-xs text-zinc-500">
             No invoices or quotes linked to this client yet.
           </p>
         ) : (
           documents.map((doc, index) => (
-            <div
+            <button
               key={doc.id}
-              className={`${DOC_GRID} items-center border-b border-zinc-200 px-3 py-2 text-xs last:border-b-0 ${
+              type="button"
+              onClick={() => void onSelectDocument(doc)}
+              disabled={openingDocumentId === doc.id}
+              className={`${DOC_GRID} w-full cursor-pointer items-center border-b border-zinc-200 px-3 py-2 text-left text-xs transition last:border-b-0 hover:bg-blue-50/60 disabled:opacity-60 ${
                 index % 2 === 0 ? "bg-white" : "bg-zinc-50"
               }`}
             >
@@ -121,7 +149,7 @@ function ClientDocumentsTable({ documents }: { documents: ClientDocumentRow[] })
               >
                 {doc.status}
               </span>
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -129,60 +157,25 @@ function ClientDocumentsTable({ documents }: { documents: ClientDocumentRow[] })
   );
 }
 
-function BalanceStat({
-  label,
-  amount,
-  count,
-  accent,
-}: {
-  label: string;
-  amount: number;
-  count: number;
-  accent: "amber" | "emerald" | "rose";
-}) {
-  const accentClass =
-    accent === "amber"
-      ? "from-amber-50/80 to-white border-amber-100"
-      : accent === "emerald"
-        ? "from-emerald-50/80 to-white border-emerald-100"
-        : "from-rose-50/80 to-white border-rose-100";
-
-  const valueClass =
-    accent === "amber"
-      ? "text-amber-700"
-      : accent === "emerald"
-        ? "text-emerald-700"
-        : "text-rose-700";
-
-  return (
-    <div
-      className={`rounded-xl border bg-gradient-to-br p-4 ${accentClass}`}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.07em] text-zinc-500">
-        {label}
-      </p>
-      <p className={`mt-1 text-lg font-bold tabular-nums ${valueClass}`}>
-        {formatMoney(amount)}
-      </p>
-      <p className="mt-0.5 text-xs text-zinc-500">
-        {count} invoice{count === 1 ? "" : "s"}
-      </p>
-    </div>
-  );
-}
-
 export default function AdminClientDetailModal({
   client,
-  draftRecords,
+  documentRecords,
   onClose,
   onSaved,
   onDeleted,
+  onDocumentsChanged,
 }: AdminClientDetailModalProps) {
   const [mode, setMode] = useState<"view" | "edit">("view");
   const [form, setForm] = useState<ClientFormData>(EMPTY_CLIENT_FORM);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<StoredRecord | null>(
+    null
+  );
+  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(
+    null
+  );
 
   const catalog = useMemo(
     () => (client ? clientCatalogFromRecord(client) : null),
@@ -200,13 +193,13 @@ export default function AdminClientDetailModal({
         overdueCount: 0,
       };
     }
-    return computeClientBalanceStats(catalog, draftRecords);
-  }, [catalog, draftRecords]);
+    return computeClientBalanceStats(catalog, documentRecords, client);
+  }, [catalog, documentRecords, client]);
 
   const documents = useMemo(() => {
     if (!catalog) return [];
-    return getClientDocuments(catalog, draftRecords);
-  }, [catalog, draftRecords]);
+    return getClientDocuments(catalog, documentRecords, client);
+  }, [catalog, documentRecords, client]);
 
   useEffect(() => {
     if (!client) return;
@@ -215,16 +208,74 @@ export default function AdminClientDetailModal({
     setError(null);
     setSaving(false);
     setDeleting(false);
+    setSelectedDocument(null);
+    setOpeningDocumentId(null);
   }, [client]);
+
+  useEffect(() => {
+    if (!selectedDocument) return;
+    const fresh = documentRecords.find(
+      (entry) => entry.id === selectedDocument.id
+    );
+    if (fresh) setSelectedDocument(fresh);
+  }, [documentRecords, selectedDocument?.id]);
 
   useEffect(() => {
     if (!client) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !saving && !deleting) onClose();
+      if (event.key !== "Escape" || saving || deleting) return;
+      if (selectedDocument) {
+        setSelectedDocument(null);
+        return;
+      }
+      onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [client, deleting, onClose, saving]);
+  }, [client, deleting, onClose, saving, selectedDocument]);
+
+  const handleSelectDocument = async (doc: ClientDocumentRow) => {
+    setError(null);
+    setOpeningDocumentId(doc.id);
+
+    try {
+      let record = resolveClientDocumentRecord(doc, documentRecords);
+
+      if (!record) {
+        const fetchIds = [
+          doc.id,
+          `doc-${doc.docId}`,
+          `quote-${doc.docId}`,
+          `draft-${doc.docId}`,
+        ].filter((id, index, arr) => Boolean(id) && arr.indexOf(id) === index);
+
+        for (const id of fetchIds) {
+          try {
+            const { record: fetched } = await fetchRecordById(id);
+            if (fetched) {
+              record = fetched;
+              break;
+            }
+          } catch {
+            // try next id
+          }
+        }
+      }
+
+      if (!record) {
+        setError("Could not open this invoice. Try refreshing the page.");
+        return;
+      }
+
+      setSelectedDocument(record);
+    } finally {
+      setOpeningDocumentId(null);
+    }
+  };
+
+  const handleDocumentChanged = async () => {
+    await onDocumentsChanged?.();
+  };
 
   if (!client || !catalog) return null;
 
@@ -259,6 +310,11 @@ export default function AdminClientDetailModal({
           phone: form.phone.trim(),
           url: form.url.trim(),
           profileImage: form.profileImage,
+          addressLine1: form.addressLine1.trim(),
+          addressLine2: form.addressLine2.trim(),
+          city: form.city.trim(),
+          state: form.state.trim(),
+          zipCode: form.zipCode.trim(),
           catalog: client.data.catalog ?? true,
         },
       });
@@ -294,10 +350,21 @@ export default function AdminClientDetailModal({
   };
 
   return (
+    <>
+    <AdminDocumentDetailModal
+      record={selectedDocument}
+      stacked
+      onClose={() => setSelectedDocument(null)}
+      onDeleted={async () => {
+        await handleDocumentChanged();
+        setSelectedDocument(null);
+      }}
+      onUpdated={handleDocumentChanged}
+    />
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={() => {
-        if (!saving && !deleting) onClose();
+        if (!saving && !deleting && !selectedDocument) onClose();
       }}
     >
       <div
@@ -309,6 +376,21 @@ export default function AdminClientDetailModal({
       >
         <div className="border-b border-zinc-100 bg-zinc-50/80 px-6 py-5">
           <div className="flex items-start gap-3">
+            {mode === "edit" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(catalogToForm(client));
+                  setMode("view");
+                  setError(null);
+                }}
+                className="admin-back-button mt-0.5 shrink-0"
+                aria-label="Back to client profile"
+                disabled={saving || deleting}
+              >
+                <AdminIcon name="chevron-left" size={14} />
+              </button>
+            ) : null}
             {mode === "view" ? (
               <AdminClientAvatar
                 profileImage={catalog.profileImage}
@@ -380,7 +462,7 @@ export default function AdminClientDetailModal({
         </div>
 
         {mode === "view" ? (
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="space-y-5 px-6 py-5">
               <dl className="grid gap-3 text-sm">
               {catalog.email ? (
@@ -401,31 +483,46 @@ export default function AdminClientDetailModal({
                   <dd className="min-w-0 truncate text-zinc-800">{catalog.url}</dd>
                 </div>
               ) : null}
-              {!catalog.email && !catalog.phone && !catalog.url ? (
+              {hasClientAddress(catalog) ? (
+                <div className="flex gap-3">
+                  <dt className="w-16 shrink-0 text-zinc-400">Address</dt>
+                  <dd className="whitespace-pre-line text-zinc-800">
+                    {formatClientAddress(catalog)}
+                  </dd>
+                </div>
+              ) : null}
+              {!catalog.email &&
+              !catalog.phone &&
+              !catalog.url &&
+              !hasClientAddress(catalog) ? (
                 <p className="text-sm text-zinc-500">No contact details on file.</p>
               ) : null}
             </dl>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <BalanceStat
-                label="Open balance"
-                amount={balances.openBalance}
-                count={balances.openCount}
-                accent="amber"
-              />
-              <BalanceStat
-                label="Closed balance"
-                amount={balances.closedBalance}
-                count={balances.closedCount}
-                accent="emerald"
-              />
-              <BalanceStat
-                label="Overdue"
-                amount={balances.overdueBalance}
-                count={balances.overdueCount}
-                accent="rose"
-              />
-            </div>
+            <AdminBalanceBreakdownCard
+              title="Client balances"
+              subtitle={`Open vs closed across ${
+                balances.openCount + balances.closedCount || "no"
+              } tracked invoice${
+                balances.openCount + balances.closedCount === 1 ? "" : "s"
+              }`}
+              open={balances.openCount}
+              closed={balances.closedCount}
+              overdue={balances.overdueCount}
+              amounts={{
+                open: balances.openBalance,
+                closed: balances.closedBalance,
+                overdue: balances.overdueBalance,
+              }}
+              compact
+              surface="plain"
+            />
+
+            <AdminInvoicePaymentPanel
+              documents={documents}
+              documentRecords={documentRecords}
+              onPaymentApplied={handleDocumentChanged}
+            />
 
             {error ? (
               <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -434,7 +531,7 @@ export default function AdminClientDetailModal({
             ) : null}
             </div>
 
-            <div className="mt-auto border-t border-zinc-200 bg-zinc-50/50 px-6 py-4">
+            <div className="border-t border-zinc-200 bg-zinc-50/50 px-6 py-4">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Invoices & quotes
@@ -443,11 +540,18 @@ export default function AdminClientDetailModal({
                   {documents.length} record{documents.length === 1 ? "" : "s"}
                 </span>
               </div>
-              <ClientDocumentsTable documents={documents} />
+              <ClientDocumentsTable
+                documents={documents}
+                onSelectDocument={handleSelectDocument}
+                openingDocumentId={openingDocumentId}
+              />
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSave} className="space-y-4 px-6 py-5">
+          <form
+            onSubmit={handleSave}
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5"
+          >
             <AdminClientProfileUpload
               value={form.profileImage}
               onChange={(profileImage) =>
@@ -514,6 +618,14 @@ export default function AdminClientDetailModal({
                 />
               </div>
             </div>
+            <AdminClientAddressCard
+              values={form}
+              onChange={(field, value) =>
+                setForm((prev) => ({ ...prev, [field]: value }))
+              }
+              disabled={saving}
+              idPrefix="edit-address"
+            />
             <div>
               <label className="doc-label" htmlFor="edit-url">
                 Website
@@ -555,5 +667,6 @@ export default function AdminClientDetailModal({
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -12,6 +12,7 @@ type ClientNameAutocompleteProps = {
   onChange: (value: string) => void;
   onSelect: (client: CatalogClient) => void;
   placeholder?: string;
+  compact?: boolean;
 };
 
 export default function ClientNameAutocomplete({
@@ -20,6 +21,7 @@ export default function ClientNameAutocomplete({
   onChange,
   onSelect,
   placeholder = "Client name",
+  compact = false,
 }: ClientNameAutocompleteProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -57,7 +59,7 @@ export default function ClientNameAutocomplete({
   return (
     <div ref={wrapRef} className="client-autocomplete no-print">
       <input
-        className="field"
+        className={compact ? "field field-compact" : "field"}
         placeholder={placeholder}
         value={value}
         autoComplete="off"

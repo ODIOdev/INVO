@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AdminClientProfileUpload from "@/components/admin/AdminClientProfileUpload";
+import AdminClientAddressCard from "@/components/admin/AdminClientAddressCard";
 import AdminIcon from "@/components/admin/AdminIcons";
 import { EMPTY_CLIENT_FORM, formatPhoneNumber } from "@/lib/client-form";
 import { upsertStorageRecord } from "@/lib/storage/dbClient";
@@ -76,6 +77,11 @@ export default function AdminClientOnboardModal({
           phone: form.phone.trim(),
           url: form.url.trim(),
           profileImage: form.profileImage,
+          addressLine1: form.addressLine1.trim(),
+          addressLine2: form.addressLine2.trim(),
+          city: form.city.trim(),
+          state: form.state.trim(),
+          zipCode: form.zipCode.trim(),
           catalog: true,
         },
       });
@@ -193,6 +199,12 @@ export default function AdminClientOnboardModal({
               />
             </div>
           </div>
+          <AdminClientAddressCard
+            values={form}
+            onChange={update}
+            disabled={saving}
+            idPrefix="onboard-address"
+          />
           <div>
             <label className="doc-label" htmlFor="onboard-url">
               Website

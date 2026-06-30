@@ -9,6 +9,7 @@ import {
   type AdminView,
 } from "@/components/admin/admin-nav";
 import AdminIcon from "@/components/admin/AdminIcons";
+import AdminSidebarSignOut from "@/components/admin/AdminSidebarSignOut";
 import type { AdminIconName } from "@/lib/admin-icons";
 
 type AdminSidebarProps = {
@@ -237,6 +238,7 @@ export default function AdminSidebar({
             </span>
             <AdminIcon name="chevron-right" size={14} className="text-zinc-300" />
           </Link>
+          <AdminSidebarSignOut />
         </div>
       </div>
     </aside>

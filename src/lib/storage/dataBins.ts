@@ -1,4 +1,6 @@
 import type { AdminIconName } from "@/lib/admin-icons";
+import type { StoredAdminProfile } from "@/lib/admin-profiles";
+import type { StoredMasterAccount } from "@/lib/admin-account";
 
 export const DATA_BINS = {
   clients: {
@@ -33,8 +35,8 @@ export const DATA_BINS = {
   },
   labor: {
     id: "labor",
-    label: "Labor",
-    description: "Labor entries — hours, rates, and titles",
+    label: "Systems | Applications",
+    description: "Systems and application catalog entries",
     icon: "labor" as AdminIconName,
   },
   notes: {
@@ -53,6 +55,7 @@ export interface StoredRecord {
   label: string;
   data: Record<string, unknown>;
   source: "invoice-app" | "admin-demo" | "sync";
+  profileId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +69,8 @@ export interface DatabaseSchema {
   version: number;
   records: StoredRecord[];
   deletedRecords: DeletedRecord[];
+  adminProfiles?: StoredAdminProfile[];
+  masterAccount?: StoredMasterAccount;
   lastSyncedAt: string | null;
 }
 

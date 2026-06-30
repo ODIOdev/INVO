@@ -55,14 +55,14 @@ export default function AdminDemoForm({
     switch (selectedBin) {
       case "clients":
         return {
-          id: `client-${docId}`,
+          id: `client-catalog-${crypto.randomUUID()}`,
           data: {
             clientName: form.clientName,
             companyName: form.companyName,
             email: form.email,
             phone: form.phone,
             url: form.url,
-            documentId: docId,
+            catalog: true,
           },
         };
       case "documents":

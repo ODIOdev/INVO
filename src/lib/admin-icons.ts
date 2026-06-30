@@ -16,10 +16,13 @@ export type AdminIconName =
   | "pencil"
   | "trash"
   | "chevron-down"
+  | "chevron-left"
   | "chevron-right"
   | "cloud"
   | "mail"
-  | "credit-card";
+  | "credit-card"
+  | "eye"
+  | "eye-off";
 
 export type DataBinIconName = Extract<
   AdminIconName,

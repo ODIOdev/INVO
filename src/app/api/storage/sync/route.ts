@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
+import { requireStorageScope } from "@/lib/storage/storage-auth";
 import {
   bulkUpsertRecords,
   parseBinId,
 } from "@/lib/storage/internalDatabase";
 
 export async function POST(request: Request) {
+  const scopeResult = await requireStorageScope();
+  if (scopeResult instanceof NextResponse) return scopeResult;
+
   const body = await request.json();
   const records = Array.isArray(body.records) ? body.records : [];
 
@@ -18,8 +22,12 @@ export async function POST(request: Request) {
   const stripClientDocIds = Array.isArray(body.stripClientDocIds)
     ? body.stripClientDocIds.filter((id: unknown) => typeof id === "string")
     : [];
+  const stripDraftDocIds = Array.isArray(body.stripDraftDocIds)
+    ? body.stripDraftDocIds.filter((id: unknown) => typeof id === "string")
+    : [];
 
   const result = await bulkUpsertRecords(
+    scopeResult,
     valid.map((r: {
       id?: string;
       binId: string;
@@ -33,7 +41,7 @@ export async function POST(request: Request) {
       label: r.label,
       source: r.source ?? "sync",
     })),
-    { draftOnlyDocIds, stripClientDocIds }
+    { draftOnlyDocIds, stripClientDocIds, stripDraftDocIds }
   );
 
   return NextResponse.json({

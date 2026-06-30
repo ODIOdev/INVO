@@ -17,6 +17,11 @@ export type ClientInfo = {
   email: string;
   phone: string;
   url: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  zipCode: string;
   projectName: string;
   documentNumber: string;
   issueDate: string;
@@ -32,7 +37,9 @@ export type DraftState = {
   laborHours: number;
   laborRate: number;
   deposit: number;
+  amountPaid?: number;
   notes: string;
+  catalogClientId?: string;
 };
 
 export type SavedDraft = {
@@ -80,6 +87,11 @@ export function createDefaultState(docType: DocType = "Quote"): DraftState {
       email: "",
       phone: "",
       url: "",
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      state: "",
+      zipCode: "",
       projectName: "",
       documentNumber: generateDocumentNumber(docType),
       issueDate: getTodayDate(),
@@ -98,6 +110,7 @@ export function createDefaultState(docType: DocType = "Quote"): DraftState {
     laborHours: 0,
     laborRate: 0,
     deposit: 0,
+    amountPaid: 0,
     notes: "",
   };
 }
@@ -147,6 +160,11 @@ export function isBlankDraftState(state: DraftState): boolean {
     !client.email.trim() &&
     !client.phone.trim() &&
     !client.url.trim() &&
+    !client.addressLine1.trim() &&
+    !client.addressLine2.trim() &&
+    !client.city.trim() &&
+    !client.state.trim() &&
+    !client.zipCode.trim() &&
     !client.projectName.trim();
 
   const servicesEmpty =
@@ -166,7 +184,8 @@ export function isBlankDraftState(state: DraftState): boolean {
     laborHours === 0 &&
     laborRate === 0 &&
     !notes.trim() &&
-    (deposit ?? 0) === 0
+    (deposit ?? 0) === 0 &&
+    (state.amountPaid ?? 0) === 0
   );
 }
 
@@ -185,7 +204,8 @@ export function calculateDraftTotals(state: DraftState) {
   const taxAmount = subtotal * (taxPercent / 100);
   const grandTotal = subtotal + taxAmount;
   const deposit = state.deposit ?? 0;
-  const balanceDue = Math.max(0, grandTotal - deposit);
+  const amountPaid = state.amountPaid ?? 0;
+  const balanceDue = Math.max(0, grandTotal - deposit - amountPaid);
 
   return {
     serviceSubtotal,
@@ -194,6 +214,7 @@ export function calculateDraftTotals(state: DraftState) {
     taxAmount,
     grandTotal,
     deposit,
+    amountPaid,
     balanceDue,
   };
 }
@@ -205,12 +226,55 @@ export function formatMoney(amount: number): string {
   });
 }
 
+export function formatMoneyInput(amount: number): string {
+  return amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function parseCurrencyInput(raw: string): number {
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  const parsed = parseFloat(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeClientInfo(client: Partial<ClientInfo>): ClientInfo {
+  return {
+    clientName: client.clientName ?? "",
+    companyName: client.companyName ?? "",
+    email: client.email ?? "",
+    phone: client.phone ?? "",
+    url: client.url ?? "",
+    addressLine1: client.addressLine1 ?? "",
+    addressLine2: client.addressLine2 ?? "",
+    city: client.city ?? "",
+    state: client.state ?? "",
+    zipCode: client.zipCode ?? "",
+    projectName: client.projectName ?? "",
+    documentNumber: client.documentNumber ?? "",
+    issueDate: client.issueDate ?? "",
+    dueDate: client.dueDate ?? "",
+  };
+}
+
+function normalizeDraftState(state: DraftState): DraftState {
+  return {
+    ...state,
+    client: normalizeClientInfo(state.client),
+  };
+}
+
 function readDrafts(): SavedDraft[] {
   if (typeof window === "undefined") return [];
   const raw = localStorage.getItem(DRAFTS_KEY);
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as SavedDraft[];
+    const drafts = JSON.parse(raw) as SavedDraft[];
+    return drafts.map((draft) => ({
+      ...draft,
+      state: normalizeDraftState(draft.state),
+    }));
   } catch {
     return [];
   }
@@ -226,7 +290,7 @@ export function migrateLegacyDraft(): void {
   if (!legacy) return;
 
   try {
-    const state = JSON.parse(legacy) as DraftState;
+    const state = normalizeDraftState(JSON.parse(legacy) as DraftState);
     const drafts = readDrafts();
     const alreadyMigrated = drafts.some(
       (d) => d.state.client.documentNumber === state.client.documentNumber

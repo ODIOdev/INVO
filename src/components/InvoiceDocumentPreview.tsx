@@ -5,6 +5,7 @@ import {
   formatMoney,
   type DraftState,
 } from "@/lib/drafts";
+import { formatClientAddress, hasClientAddress } from "@/lib/client-form";
 
 function formatDisplayDate(value: string): string {
   if (!value) return "—";
@@ -20,16 +21,18 @@ function formatDisplayDate(value: string): string {
 function PreviewField({
   label,
   value,
+  compact = false,
 }: {
   label: string;
   value: string;
+  compact?: boolean;
 }) {
   if (!value) return null;
 
   return (
     <div>
-      <p className="doc-label">{label}</p>
-      <p className="text-[13px] text-zinc-900">{value}</p>
+      <p className={compact ? "doc-label text-[9px]" : "doc-label"}>{label}</p>
+      <p className="text-[12px] text-zinc-900">{value}</p>
     </div>
   );
 }
@@ -69,33 +72,47 @@ export default function InvoiceDocumentPreview({
 
         <div className="paper-divider" />
 
-        <div className="grid gap-10 sm:grid-cols-2">
-          <div>
-            <p className="doc-heading mb-4">Bill To</p>
-            <div className="space-y-3">
-              <PreviewField label="Name" value={client.clientName} />
-              <PreviewField label="Company" value={client.companyName} />
-              <PreviewField label="Email" value={client.email} />
-              <PreviewField label="Phone" value={client.phone} />
-              <PreviewField label="Website" value={client.url} />
+        <div className="invoice-meta-grid">
+          <div className="invoice-meta-card">
+            <p className="invoice-meta-card-title">Bill To</p>
+            <div className="space-y-1.5">
+              <PreviewField label="Name" value={client.clientName} compact />
+              <PreviewField label="Company" value={client.companyName} compact />
+              <PreviewField label="Email" value={client.email} compact />
+              <PreviewField label="Phone" value={client.phone} compact />
+              <PreviewField label="Website" value={client.url} compact />
             </div>
           </div>
 
-          <div>
-            <p className="doc-heading mb-4">Project Details</p>
-            <div className="space-y-3">
-              <PreviewField label="Project Name" value={client.projectName} />
+          <div className="invoice-meta-card">
+            <p className="invoice-meta-card-title">Address</p>
+            {hasClientAddress(client) ? (
+              <p className="whitespace-pre-line text-[12px] leading-relaxed text-zinc-800">
+                {formatClientAddress(client)}
+              </p>
+            ) : (
+              <p className="text-[12px] text-zinc-400">—</p>
+            )}
+          </div>
+
+          <div className="invoice-meta-card">
+            <p className="invoice-meta-card-title">Project Details</p>
+            <div className="space-y-1.5">
+              <PreviewField label="Project" value={client.projectName} compact />
               <PreviewField
-                label={`${docType} Number`}
+                label={`${docType} #`}
                 value={client.documentNumber}
+                compact
               />
               <PreviewField
                 label="Issue Date"
                 value={formatDisplayDate(client.issueDate)}
+                compact
               />
               <PreviewField
                 label="Due Date"
                 value={formatDisplayDate(client.dueDate)}
+                compact
               />
             </div>
           </div>
@@ -104,7 +121,7 @@ export default function InvoiceDocumentPreview({
         <div className="paper-divider" />
 
         <div>
-          <p className="doc-heading mb-4">Line Items</p>
+          <p className="doc-heading section-accent-title mb-4">Line Items</p>
           <table className="line-items">
             <thead>
               <tr>
@@ -138,7 +155,9 @@ export default function InvoiceDocumentPreview({
         <div className="grid gap-6 lg:grid-cols-2">
           {(laborTitle || laborHours || laborRate) && (
             <div className="info-card">
-              <p className="info-card-heading">Systems | Applications</p>
+              <p className="info-card-heading section-accent-title">
+                Systems | Applications
+              </p>
               <div className="space-y-3">
                 {laborTitle && (
                   <PreviewField label="Description" value={laborTitle} />
@@ -161,7 +180,7 @@ export default function InvoiceDocumentPreview({
           )}
 
           <div className="info-card">
-            <p className="info-card-heading">Summary</p>
+            <p className="info-card-heading section-accent-title">Summary</p>
             <div className="totals-panel">
               <SummaryRow label="Services" value={formatMoney(serviceSubtotal)} />
               <SummaryRow label="Labor" value={formatMoney(laborTotal)} />
@@ -190,7 +209,7 @@ export default function InvoiceDocumentPreview({
           <>
             <div className="paper-divider" />
             <div>
-              <p className="doc-heading mb-3">Notes & Terms</p>
+              <p className="doc-heading section-accent-title mb-3">Notes & Terms</p>
               <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-zinc-700">
                 {notes}
               </p>

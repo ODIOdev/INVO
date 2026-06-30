@@ -2,13 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import AdminAccountProfileCard from "@/components/admin/AdminAccountProfileCard";
 import AdminIcon from "@/components/admin/AdminIcons";
+import AdminProfileTag from "@/components/admin/AdminProfileTag";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import type { AdminIconName } from "@/lib/admin-icons";
+import type { AdminAccountSettings } from "@/lib/admin-account";
+import type { AdminProfileListItem } from "@/lib/admin-profiles";
 import { DATA_BINS, type BinSummary, type DataBinId, type DeletedRecord } from "@/lib/storage/dataBins";
 import {
   fetchDeletedRecords,
+  downloadCsvExport,
+  uploadCsvImport,
   masterResetDatabase,
   purgeAllDeletedRecords,
   restoreDeletedRecord,
@@ -24,7 +30,20 @@ type AdminSettingsPanelProps = {
   emailProvider: string | null;
   smsConfigured: boolean;
   twilioFromNumber: string | null;
+  isMasterAdmin?: boolean;
+  initialAdminProfiles?: AdminProfileListItem[];
+  initialAccountSettings: AdminAccountSettings;
 };
+
+function formatProfileDate(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 function formatDeletedDate(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
@@ -97,6 +116,9 @@ export default function AdminSettingsPanel({
   emailProvider,
   smsConfigured,
   twilioFromNumber,
+  isMasterAdmin = false,
+  initialAdminProfiles = [],
+  initialAccountSettings,
 }: AdminSettingsPanelProps) {
   const router = useRouter();
   const [confirmText, setConfirmText] = useState("");
@@ -108,12 +130,88 @@ export default function AdminSettingsPanel({
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [purgingAll, setPurgingAll] = useState(false);
   const [dangerZoneOpen, setDangerZoneOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [integrationsOpen, setIntegrationsOpen] = useState(false);
+  const [profilesOpen, setProfilesOpen] = useState(false);
+  const [dataTransferBusy, setDataTransferBusy] = useState<
+    "export" | "import" | null
+  >(null);
+  const [adminProfiles, setAdminProfiles] = useState(initialAdminProfiles);
+  const [profilesLoading, setProfilesLoading] = useState(false);
+  const [deletingProfileId, setDeletingProfileId] = useState<string | null>(
+    null
+  );
+  const [visiblePasswordIds, setVisiblePasswordIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [loadingPasswordIds, setLoadingPasswordIds] = useState<Set<string>>(
+    new Set()
+  );
+  const importInputRef = useRef<HTMLInputElement>(null);
 
-  const integrationsConnected = [
-    backend === "redis",
-    emailConfigured,
-    stripeConfigured,
-  ].filter(Boolean).length;
+  const togglePasswordVisibility = (profileId: string) => {
+    setVisiblePasswordIds((current) => {
+      const next = new Set(current);
+      if (next.has(profileId)) {
+        next.delete(profileId);
+      } else {
+        next.add(profileId);
+      }
+      return next;
+    });
+  };
+
+  const handlePasswordToggle = async (profile: AdminProfileListItem) => {
+    if (visiblePasswordIds.has(profile.id)) {
+      togglePasswordVisibility(profile.id);
+      return;
+    }
+
+    let password = profile.password;
+
+    if (!password) {
+      setLoadingPasswordIds((current) => new Set(current).add(profile.id));
+      try {
+        const response = await fetch(`/api/admin/profiles/${profile.id}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const data = (await response.json()) as {
+          password?: string | null;
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(data.error ?? "Failed to load password.");
+        }
+        password = data.password?.trim() || null;
+        if (password) {
+          setAdminProfiles((current) =>
+            current.map((entry) =>
+              entry.id === profile.id ? { ...entry, password } : entry
+            )
+          );
+        }
+      } catch {
+        setError("Failed to load password for this profile.");
+        return;
+      } finally {
+        setLoadingPasswordIds((current) => {
+          const next = new Set(current);
+          next.delete(profile.id);
+          return next;
+        });
+      }
+    }
+
+    if (!password) {
+      setError(
+        "Password not stored for this profile. It will appear after the user signs in again."
+      );
+      return;
+    }
+
+    togglePasswordVisibility(profile.id);
+  };
 
   const loadTrash = useCallback(async () => {
     setTrashLoading(true);
@@ -167,6 +265,44 @@ export default function AdminSettingsPanel({
     }
   };
 
+  const handleExportCsv = async () => {
+    setDataTransferBusy("export");
+    setError(null);
+    setMessage(null);
+
+    try {
+      await downloadCsvExport("all");
+      setMessage("CSV export downloaded.");
+    } catch {
+      setError("Failed to generate CSV export.");
+    } finally {
+      setDataTransferBusy(null);
+    }
+  };
+
+  const handleImportCsv = async (file: File) => {
+    setDataTransferBusy("import");
+    setError(null);
+    setMessage(null);
+
+    try {
+      const result = await uploadCsvImport(file);
+      setMessage(`Imported ${result.imported} record${result.imported === 1 ? "" : "s"}.`);
+      router.refresh();
+    } catch (importError) {
+      setError(
+        importError instanceof Error
+          ? importError.message
+          : "Failed to import CSV."
+      );
+    } finally {
+      setDataTransferBusy(null);
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+      }
+    }
+  };
+
   const handleMasterReset = async () => {
     if (
       !window.confirm(
@@ -198,6 +334,85 @@ export default function AdminSettingsPanel({
     }
   };
 
+  const integrationsConnected = [
+    backend === "redis",
+    emailConfigured,
+    stripeConfigured,
+  ].filter(Boolean).length;
+
+  const loadAdminProfiles = useCallback(async () => {
+    if (!isMasterAdmin) return;
+
+    setProfilesLoading(true);
+    try {
+      const response = await fetch("/api/admin/profiles", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      const data = (await response.json()) as {
+        profiles?: AdminProfileListItem[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to load profiles.");
+      }
+      setAdminProfiles(data.profiles ?? []);
+    } catch {
+      setError("Failed to load user profiles.");
+    } finally {
+      setProfilesLoading(false);
+    }
+  }, [isMasterAdmin]);
+
+  const handleDeleteProfile = async (profile: AdminProfileListItem) => {
+    if (
+      !window.confirm(
+        `Delete profile "${profile.displayName}" (@${profile.username})? This permanently removes their account and all dashboard data.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingProfileId(profile.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/admin/profiles/${profile.id}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        deletedRecords?: number;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to delete profile.");
+      }
+
+      setAdminProfiles((current) =>
+        current.filter((entry) => entry.id !== profile.id)
+      );
+      setMessage(
+        `Deleted @${profile.username}${
+          typeof data.deletedRecords === "number" && data.deletedRecords > 0
+            ? ` and ${data.deletedRecords} associated record${data.deletedRecords === 1 ? "" : "s"}.`
+            : "."
+        }`
+      );
+      router.refresh();
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Failed to delete profile."
+      );
+    } finally {
+      setDeletingProfileId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#eceef1]">
       <header className="admin-header">
@@ -209,6 +424,7 @@ export default function AdminSettingsPanel({
             <h1 className="text-lg font-semibold text-zinc-900">Dashboard</h1>
           </div>
           <nav className="flex flex-wrap items-center gap-2">
+            <AdminProfileTag />
             <Link href="/" className="btn-outline text-xs">
               Website
             </Link>
@@ -225,9 +441,11 @@ export default function AdminSettingsPanel({
           activeView="home"
           onSelectHome={() => router.push("/admin")}
           onSelectBin={(binId: DataBinId) =>
-            router.push(`/admin?view=${binId}`)
+            router.push(`/admin?view=${binId}&from=settings`)
           }
-          onSelectIntegrations={() => router.push("/admin?view=integrations")}
+          onSelectIntegrations={() =>
+            router.push("/admin?view=integrations&from=settings")
+          }
         />
 
         <main className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
@@ -266,6 +484,8 @@ export default function AdminSettingsPanel({
               </div>
             </section>
 
+            <AdminAccountProfileCard initialSettings={initialAccountSettings} />
+
             {(message || error) && (
               <div
                 className={`admin-settings-toast ${
@@ -278,7 +498,45 @@ export default function AdminSettingsPanel({
               </div>
             )}
 
-            <section className="grid gap-4 lg:grid-cols-2">
+            <section className="admin-settings-card">
+              <button
+                type="button"
+                onClick={() => setIntegrationsOpen((open) => !open)}
+                className="flex w-full items-start gap-3 text-left"
+                aria-expanded={integrationsOpen}
+              >
+                <span className="admin-dash-action-icon mt-0.5 shrink-0">
+                  <AdminIcon name="integrations" size={18} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-zinc-900">
+                      Storage & integrations
+                    </h3>
+                    <AdminIcon
+                      name="chevron-down"
+                      size={16}
+                      className={`shrink-0 text-zinc-400 transition-transform ${
+                        integrationsOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </span>
+                  {!integrationsOpen ? (
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {integrationsConnected}/3 integrations connected — click to
+                      expand
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Cloud storage, email, SMS, Stripe, and data transfer.
+                    </p>
+                  )}
+                </span>
+              </button>
+
+              {integrationsOpen ? (
+                <div className="mt-4 border-t border-zinc-100 pt-4">
+                  <section className="grid gap-4 lg:grid-cols-2">
               <SettingsCard
                 title="Cloud storage"
                 description="Where quotes, invoices, and catalog data are stored."
@@ -415,99 +673,333 @@ export default function AdminSettingsPanel({
                   Open integrations
                 </Link>
               </article>
+
+              <article className="admin-settings-card flex flex-col justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="admin-dash-action-icon mt-0.5 shrink-0">
+                    <AdminIcon name="folder-open" size={18} />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-zinc-900">
+                      Data transfer
+                    </h3>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Export or import dashboard records as CSV.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2 sm:ml-11">
+                  <button
+                    type="button"
+                    onClick={() => void handleExportCsv()}
+                    disabled={dataTransferBusy !== null || totalRecords === 0}
+                    className="btn-outline px-3 py-1.5 text-xs"
+                  >
+                    {dataTransferBusy === "export" ? "Exporting…" : "Export CSV"}
+                  </button>
+                  <label
+                    className={`btn-outline inline-flex cursor-pointer px-3 py-1.5 text-xs ${
+                      dataTransferBusy !== null
+                        ? "pointer-events-none opacity-50"
+                        : ""
+                    }`}
+                  >
+                    {dataTransferBusy === "import" ? "Importing…" : "Import CSV"}
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="sr-only"
+                      disabled={dataTransferBusy !== null}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void handleImportCsv(file);
+                      }}
+                    />
+                  </label>
+                </div>
+              </article>
+                  </section>
+                </div>
+              ) : null}
             </section>
 
-            <section className="admin-settings-card">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-900">
-                    Recently deleted
-                  </h3>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    Restore records or permanently remove them from trash.
-                  </p>
-                </div>
+            {isMasterAdmin ? (
+              <section className="admin-settings-card">
                 <button
                   type="button"
-                  onClick={() => void loadTrash()}
-                  className="btn-outline px-3 py-1.5 text-xs"
-                  disabled={trashLoading}
+                  onClick={() => setProfilesOpen((open) => !open)}
+                  className="flex w-full items-start gap-3 text-left"
+                  aria-expanded={profilesOpen}
                 >
-                  {trashLoading ? "Refreshing…" : "Refresh"}
-                </button>
-              </div>
-
-              <div className="admin-settings-trash-table mt-4">
-                <div className="admin-settings-trash-head">
-                  <span>Record</span>
-                  <span className="hidden sm:block">Type</span>
-                  <span>Deleted</span>
-                  <span className="text-right">Action</span>
-                </div>
-
-                <div className="max-h-64 overflow-y-auto">
-                  {deletedRecords.length === 0 ? (
-                    <p className="bg-white px-4 py-10 text-center text-sm text-zinc-500">
-                      Trash is empty — deleted records will appear here.
-                    </p>
-                  ) : (
-                    deletedRecords.map((entry, index) => (
-                      <div
-                        key={entry.record.id}
-                        className={`admin-settings-trash-row ${
-                          index % 2 === 0 ? "bg-white" : "bg-zinc-50"
+                  <span className="admin-dash-action-icon mt-0.5 shrink-0">
+                    <AdminIcon name="clients" size={18} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-zinc-900">
+                        Users & profiles
+                      </h3>
+                      <AdminIcon
+                        name="chevron-down"
+                        size={16}
+                        className={`shrink-0 text-zinc-400 transition-transform ${
+                          profilesOpen ? "rotate-180" : ""
                         }`}
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-zinc-900">
-                            {entry.record.label}
-                          </p>
-                          <p className="mt-0.5 truncate text-xs text-zinc-500 sm:hidden">
-                            {DATA_BINS[entry.record.binId].label}
-                          </p>
-                        </div>
-                        <span className="hidden truncate text-xs text-zinc-500 sm:block">
-                          {DATA_BINS[entry.record.binId].label}
-                        </span>
-                        <span className="truncate text-xs tabular-nums text-zinc-500">
-                          {formatDeletedDate(entry.deletedAt)}
-                        </span>
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => void handleRestore(entry.record.id)}
-                            disabled={
-                              restoringId === entry.record.id || purgingAll
-                            }
-                            className="btn-outline px-2.5 py-1 text-[11px]"
-                          >
-                            {restoringId === entry.record.id
-                              ? "Restoring…"
-                              : "Recover"}
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                      />
+                    </span>
+                    {!profilesOpen ? (
+                      <p className="mt-1 text-sm text-zinc-500">
+                        {adminProfiles.length > 0
+                          ? `${adminProfiles.length} profile${adminProfiles.length === 1 ? "" : "s"} — click to expand`
+                          : "No user profiles yet — click to expand"}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-zinc-500">
+                        Dashboard accounts created from the sign-in page.
+                      </p>
+                    )}
+                  </span>
+                </button>
 
-                {deletedRecords.length > 0 ? (
-                  <div className="admin-settings-trash-foot">
-                    <p className="text-xs text-zinc-500">
-                      {deletedRecords.length} item
-                      {deletedRecords.length === 1 ? "" : "s"} in trash
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => void handlePurgeAll()}
-                      disabled={purgingAll || restoringId !== null}
-                      className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {purgingAll ? "Deleting…" : "Delete all permanently"}
-                    </button>
+                {profilesOpen ? (
+                  <div className="mt-4 border-t border-zinc-100 pt-4">
+                    <div className="mb-4 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void loadAdminProfiles()}
+                        className="btn-outline px-3 py-1.5 text-xs"
+                        disabled={profilesLoading}
+                      >
+                        {profilesLoading ? "Refreshing…" : "Refresh"}
+                      </button>
+                    </div>
+
+                <div className="admin-settings-trash-table">
+                  <div className="admin-settings-profiles-head">
+                    <span>User</span>
+                    <span>Username</span>
+                    <span>Password</span>
+                    <span>Created</span>
+                    <span className="text-right">Action</span>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto">
+                    {adminProfiles.length === 0 ? (
+                      <p className="bg-white px-4 py-10 text-center text-sm text-zinc-500">
+                        No user profiles yet — accounts appear here after someone
+                        creates a profile on the sign-in page.
+                      </p>
+                    ) : (
+                      adminProfiles.map((profile, index) => (
+                        <div
+                          key={profile.id}
+                          className={`admin-settings-profiles-row ${
+                            index % 2 === 0 ? "bg-white" : "bg-zinc-50"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-zinc-900">
+                              {profile.displayName}
+                            </p>
+                          </div>
+                          <span className="truncate font-mono text-xs text-zinc-600">
+                            @{profile.username}
+                          </span>
+                          <div className="flex min-w-0 items-center gap-1">
+                            <span className="truncate font-mono text-xs tracking-wider text-zinc-700">
+                              {visiblePasswordIds.has(profile.id) && profile.password
+                                ? profile.password
+                                : "*".repeat(
+                                    profile.password
+                                      ? Math.min(profile.password.length, 10)
+                                      : 8
+                                  )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handlePasswordToggle(profile);
+                              }}
+                              disabled={loadingPasswordIds.has(profile.id)}
+                              className="shrink-0 rounded p-0.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-wait disabled:opacity-50"
+                              aria-label={
+                                visiblePasswordIds.has(profile.id)
+                                  ? "Hide password"
+                                  : "Show password"
+                              }
+                            >
+                              <AdminIcon
+                                name={
+                                  visiblePasswordIds.has(profile.id)
+                                    ? "eye-off"
+                                    : "eye"
+                                }
+                                size={14}
+                              />
+                            </button>
+                          </div>
+                          <span className="truncate text-xs tabular-nums text-zinc-500">
+                            {formatProfileDate(profile.createdAt)}
+                          </span>
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteProfile(profile)}
+                              disabled={
+                                deletingProfileId === profile.id ||
+                                profilesLoading
+                              }
+                              className="rounded-md bg-red-600 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {deletingProfileId === profile.id
+                                ? "Deleting…"
+                                : "Delete"}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {adminProfiles.length > 0 ? (
+                    <div className="admin-settings-trash-foot">
+                      <p className="text-xs text-zinc-500">
+                        {adminProfiles.length} profile
+                        {adminProfiles.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
                   </div>
                 ) : null}
-              </div>
+              </section>
+            ) : null}
+
+            <section className="admin-settings-card">
+              <button
+                type="button"
+                onClick={() => setTrashOpen((open) => !open)}
+                className="flex w-full items-start gap-3 text-left"
+                aria-expanded={trashOpen}
+              >
+                <span className="admin-dash-action-icon mt-0.5 shrink-0">
+                  <AdminIcon name="folder-open" size={18} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-zinc-900">
+                      Recently deleted
+                    </h3>
+                    <AdminIcon
+                      name="chevron-down"
+                      size={16}
+                      className={`shrink-0 text-zinc-400 transition-transform ${
+                        trashOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </span>
+                  {!trashOpen ? (
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {deletedRecords.length > 0
+                        ? `${deletedRecords.length} item${deletedRecords.length === 1 ? "" : "s"} in trash — click to expand`
+                        : "Trash is empty — click to expand"}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Restore records or permanently remove them from trash.
+                    </p>
+                  )}
+                </span>
+              </button>
+
+              {trashOpen ? (
+                <div className="mt-4 border-t border-zinc-100 pt-4">
+                  <div className="mb-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => void loadTrash()}
+                      className="btn-outline px-3 py-1.5 text-xs"
+                      disabled={trashLoading}
+                    >
+                      {trashLoading ? "Refreshing…" : "Refresh"}
+                    </button>
+                  </div>
+
+                  <div className="admin-settings-trash-table">
+                    <div className="admin-settings-trash-head">
+                      <span>Record</span>
+                      <span className="hidden sm:block">Type</span>
+                      <span>Deleted</span>
+                      <span className="text-right">Action</span>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto">
+                      {deletedRecords.length === 0 ? (
+                        <p className="bg-white px-4 py-10 text-center text-sm text-zinc-500">
+                          Trash is empty — deleted records will appear here.
+                        </p>
+                      ) : (
+                        deletedRecords.map((entry, index) => (
+                          <div
+                            key={entry.record.id}
+                            className={`admin-settings-trash-row ${
+                              index % 2 === 0 ? "bg-white" : "bg-zinc-50"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-zinc-900">
+                                {entry.record.label}
+                              </p>
+                              <p className="mt-0.5 truncate text-xs text-zinc-500 sm:hidden">
+                                {DATA_BINS[entry.record.binId].label}
+                              </p>
+                            </div>
+                            <span className="hidden truncate text-xs text-zinc-500 sm:block">
+                              {DATA_BINS[entry.record.binId].label}
+                            </span>
+                            <span className="truncate text-xs tabular-nums text-zinc-500">
+                              {formatDeletedDate(entry.deletedAt)}
+                            </span>
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => void handleRestore(entry.record.id)}
+                                disabled={
+                                  restoringId === entry.record.id || purgingAll
+                                }
+                                className="btn-outline px-2.5 py-1 text-[11px]"
+                              >
+                                {restoringId === entry.record.id
+                                  ? "Restoring…"
+                                  : "Recover"}
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {deletedRecords.length > 0 ? (
+                      <div className="admin-settings-trash-foot">
+                        <p className="text-xs text-zinc-500">
+                          {deletedRecords.length} item
+                          {deletedRecords.length === 1 ? "" : "s"} in trash
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void handlePurgeAll()}
+                          disabled={purgingAll || restoringId !== null}
+                          className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {purgingAll ? "Deleting…" : "Delete all permanently"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             <section className="admin-settings-danger">

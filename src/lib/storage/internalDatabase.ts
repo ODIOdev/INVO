@@ -9,27 +9,77 @@ import {
   type StoredRecord,
 } from "./dataBins";
 import {
+  attachDocumentHistoryToClients,
+  ensureDirectoryClientLinks,
+  pruneDocumentSnapshotClients,
+} from "@/lib/client-balances";
+import { isCatalogLineItemRecord } from "@/lib/catalog-line-items";
+import { isDirectoryClientRecord } from "@/lib/catalog-clients";
+import {
+  belongsToScope,
+  recordProfileId,
+  type StorageScope,
+} from "@/lib/storage/storage-scope";
+import {
   emptyDatabase,
   loadDatabase,
   saveDatabase,
 } from "./databaseStore";
+
+export type { StorageScope } from "@/lib/storage/storage-scope";
 
 export async function readDatabase(): Promise<DatabaseSchema> {
   return loadDatabase();
 }
 
 async function writeDatabase(db: DatabaseSchema): Promise<void> {
+  pruneDocumentSnapshotClients(db);
+  ensureDirectoryClientLinks(db);
+  attachDocumentHistoryToClients(db);
   await saveDatabase(db);
 }
 
-export async function getBinSummaries(): Promise<BinSummary[]> {
+function filterBinRecords(
+  records: StoredRecord[],
+  binId: DataBinId
+): StoredRecord[] {
+  return records.filter((record) => {
+    if (record.binId !== binId) return false;
+    if (binId === "lineItems") return isCatalogLineItemRecord(record);
+    if (binId === "clients") return isDirectoryClientRecord(record);
+    return true;
+  });
+}
+
+function scopedRecords(
+  db: DatabaseSchema,
+  scope: StorageScope
+): StoredRecord[] {
+  return db.records.filter((record) => belongsToScope(record, scope));
+}
+
+function scopedDeletedRecords(
+  db: DatabaseSchema,
+  scope: StorageScope
+): DeletedRecord[] {
+  return db.deletedRecords.filter((entry) =>
+    belongsToScope(entry.record, scope)
+  );
+}
+
+export async function getBinSummaries(
+  scope: StorageScope
+): Promise<BinSummary[]> {
   const db = await readDatabase();
+  const records = scopedRecords(db, scope);
+
   return (Object.keys(DATA_BINS) as DataBinId[]).map((binId) => {
-    const binRecords = db.records.filter((r) => r.binId === binId);
+    const binRecords = filterBinRecords(records, binId);
     const lastUpdated =
       binRecords.length > 0
         ? binRecords.reduce(
-            (latest, r) => (r.updatedAt > latest ? r.updatedAt : latest),
+            (latest, record) =>
+              record.updatedAt > latest ? record.updatedAt : latest,
             binRecords[0].updatedAt
           )
         : null;
@@ -45,42 +95,57 @@ export async function getBinSummaries(): Promise<BinSummary[]> {
   });
 }
 
-export async function getRecordsByBin(binId: DataBinId): Promise<StoredRecord[]> {
+export async function getRecordsByBin(
+  scope: StorageScope,
+  binId: DataBinId
+): Promise<StoredRecord[]> {
   const db = await readDatabase();
-  return db.records
-    .filter((r) => r.binId === binId)
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+  return filterBinRecords(scopedRecords(db, scope), binId).sort(
+    (a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
 }
 
-export async function getRecordById(id: string): Promise<StoredRecord | null> {
+export async function getRecordById(
+  scope: StorageScope,
+  id: string
+): Promise<StoredRecord | null> {
   const db = await readDatabase();
-  return db.records.find((r) => r.id === id) ?? null;
+  const record = db.records.find((entry) => entry.id === id) ?? null;
+  if (!record || !belongsToScope(record, scope)) return null;
+  return record;
 }
 
-export async function upsertRecord(input: {
-  id?: string;
-  binId: DataBinId;
-  data: Record<string, unknown>;
-  label?: string;
-  source?: StoredRecord["source"];
-}): Promise<StoredRecord> {
+export async function upsertRecord(
+  scope: StorageScope,
+  input: {
+    id?: string;
+    binId: DataBinId;
+    data: Record<string, unknown>;
+    label?: string;
+    source?: StoredRecord["source"];
+  }
+): Promise<StoredRecord> {
   const db = await readDatabase();
   const now = new Date().toISOString();
   const id = input.id ?? crypto.randomUUID();
   const label = input.label ?? buildRecordLabel(input.binId, input.data);
   const source = input.source ?? "invoice-app";
 
-  const existingIndex = db.records.findIndex((r) => r.id === id);
+  const existingIndex = db.records.findIndex((record) => record.id === id);
+  if (existingIndex >= 0 && !belongsToScope(db.records[existingIndex], scope)) {
+    throw new Error("Record not found.");
+  }
+
   const record: StoredRecord = {
     id,
     binId: input.binId,
     label,
     data: input.data,
     source,
-    createdAt: existingIndex >= 0 ? db.records[existingIndex].createdAt : now,
+    profileId: scope.profileId,
+    createdAt:
+      existingIndex >= 0 ? db.records[existingIndex].createdAt : now,
     updatedAt: now,
   };
 
@@ -94,10 +159,14 @@ export async function upsertRecord(input: {
   return record;
 }
 
-export async function deleteRecord(id: string): Promise<boolean> {
+export async function deleteRecord(
+  scope: StorageScope,
+  id: string
+): Promise<boolean> {
   const db = await readDatabase();
-  const index = db.records.findIndex((r) => r.id === id);
+  const index = db.records.findIndex((record) => record.id === id);
   if (index < 0) return false;
+  if (!belongsToScope(db.records[index], scope)) return false;
 
   const [record] = db.records.splice(index, 1);
   const deletedAt = new Date().toISOString();
@@ -115,21 +184,27 @@ export async function deleteRecord(id: string): Promise<boolean> {
   return true;
 }
 
-export async function getDeletedRecords(): Promise<DeletedRecord[]> {
+export async function getDeletedRecords(
+  scope: StorageScope
+): Promise<DeletedRecord[]> {
   const db = await readDatabase();
-  return [...db.deletedRecords].sort(
+  return scopedDeletedRecords(db, scope).sort(
     (a, b) =>
       new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()
   );
 }
 
-export async function restoreDeletedRecord(id: string): Promise<boolean> {
+export async function restoreDeletedRecord(
+  scope: StorageScope,
+  id: string
+): Promise<boolean> {
   const db = await readDatabase();
   const index = db.deletedRecords.findIndex((entry) => entry.record.id === id);
   if (index < 0) return false;
+  if (!belongsToScope(db.deletedRecords[index].record, scope)) return false;
 
   const [entry] = db.deletedRecords.splice(index, 1);
-  const existingIndex = db.records.findIndex((r) => r.id === id);
+  const existingIndex = db.records.findIndex((record) => record.id === id);
 
   if (existingIndex >= 0) {
     db.records[existingIndex] = entry.record;
@@ -141,35 +216,57 @@ export async function restoreDeletedRecord(id: string): Promise<boolean> {
   return true;
 }
 
-export async function purgeDeletedRecord(id: string): Promise<boolean> {
+export async function purgeDeletedRecord(
+  scope: StorageScope,
+  id: string
+): Promise<boolean> {
   const db = await readDatabase();
-  const next = db.deletedRecords.filter((entry) => entry.record.id !== id);
+  const next = db.deletedRecords.filter(
+    (entry) =>
+      entry.record.id !== id || !belongsToScope(entry.record, scope)
+  );
   if (next.length === db.deletedRecords.length) return false;
   db.deletedRecords = next;
   await writeDatabase(db);
   return true;
 }
 
-export async function purgeAllDeletedRecords(): Promise<number> {
+export async function purgeAllDeletedRecords(
+  scope: StorageScope
+): Promise<number> {
   const db = await readDatabase();
-  const removed = db.deletedRecords.length;
+  const remaining = db.deletedRecords.filter(
+    (entry) => !belongsToScope(entry.record, scope)
+  );
+  const removed = db.deletedRecords.length - remaining.length;
   if (removed === 0) return 0;
-  db.deletedRecords = [];
+  db.deletedRecords = remaining;
   await writeDatabase(db);
   return removed;
 }
 
-export async function clearBin(binId: DataBinId): Promise<number> {
+export async function clearBin(
+  scope: StorageScope,
+  binId: DataBinId
+): Promise<number> {
   const db = await readDatabase();
   const before = db.records.length;
-  db.records = db.records.filter((r) => r.binId !== binId);
+  db.records = db.records.filter(
+    (record) =>
+      record.binId !== binId || !belongsToScope(record, scope)
+  );
   const removed = before - db.records.length;
   if (removed > 0) await writeDatabase(db);
   return removed;
 }
 
-export async function resetDatabase(): Promise<void> {
-  await writeDatabase(emptyDatabase());
+export async function resetDatabase(scope: StorageScope): Promise<void> {
+  const db = await readDatabase();
+  db.records = db.records.filter((record) => !belongsToScope(record, scope));
+  db.deletedRecords = db.deletedRecords.filter(
+    (entry) => !belongsToScope(entry.record, scope)
+  );
+  await writeDatabase(db);
 }
 
 function recordBelongsToDocument(record: StoredRecord, docId: string): boolean {
@@ -191,9 +288,22 @@ function recordBelongsToDocument(record: StoredRecord, docId: string): boolean {
   );
 }
 
-export async function deleteDocumentBundle(docId: string): Promise<number> {
+export async function getRecordsForDocument(
+  scope: StorageScope,
+  docId: string
+): Promise<StoredRecord[]> {
   const db = await readDatabase();
-  const toDelete = db.records.filter((record) =>
+  return scopedRecords(db, scope).filter((record) =>
+    recordBelongsToDocument(record, docId)
+  );
+}
+
+export async function deleteDocumentBundle(
+  scope: StorageScope,
+  docId: string
+): Promise<number> {
+  const db = await readDatabase();
+  const toDelete = scopedRecords(db, scope).filter((record) =>
     recordBelongsToDocument(record, docId)
   );
   if (toDelete.length === 0) return 0;
@@ -219,10 +329,12 @@ export async function deleteDocumentBundle(docId: string): Promise<number> {
 
 function purgeStaleDocumentRecords(
   db: DatabaseSchema,
+  scope: StorageScope,
   docId: string,
   incomingIds: Set<string>
 ): void {
   db.records = db.records.filter((record) => {
+    if (!belongsToScope(record, scope)) return true;
     if (!recordBelongsToDocument(record, docId)) return true;
 
     const isCoreRecord =
@@ -238,6 +350,7 @@ function purgeStaleDocumentRecords(
 }
 
 export async function bulkUpsertRecords(
+  scope: StorageScope,
   records: Array<{
     id?: string;
     binId: DataBinId;
@@ -245,7 +358,11 @@ export async function bulkUpsertRecords(
     label?: string;
     source?: StoredRecord["source"];
   }>,
-  options?: { draftOnlyDocIds?: string[]; stripClientDocIds?: string[] }
+  options?: {
+    draftOnlyDocIds?: string[];
+    stripClientDocIds?: string[];
+    stripDraftDocIds?: string[];
+  }
 ): Promise<{ upserted: number }> {
   const db = await readDatabase();
   const now = new Date().toISOString();
@@ -265,19 +382,28 @@ export async function bulkUpsertRecords(
   );
 
   for (const docId of docIds) {
-    purgeStaleDocumentRecords(db, docId, incomingIds);
+    purgeStaleDocumentRecords(db, scope, docId, incomingIds);
   }
 
   for (const input of records) {
     const id = input.id ?? crypto.randomUUID();
-    const existingIndex = db.records.findIndex((r) => r.id === id);
+    const existingIndex = db.records.findIndex((record) => record.id === id);
+    if (
+      existingIndex >= 0 &&
+      !belongsToScope(db.records[existingIndex], scope)
+    ) {
+      continue;
+    }
+
     const record: StoredRecord = {
       id,
       binId: input.binId,
       label: input.label ?? buildRecordLabel(input.binId, input.data),
       data: input.data,
       source: input.source ?? "sync",
-      createdAt: existingIndex >= 0 ? db.records[existingIndex].createdAt : now,
+      profileId: scope.profileId,
+      createdAt:
+        existingIndex >= 0 ? db.records[existingIndex].createdAt : now,
       updatedAt: now,
     };
 
@@ -293,16 +419,24 @@ export async function bulkUpsertRecords(
     const incomingDoc = incomingIds.has(`doc-${docId}`);
     const incomingQuote = incomingIds.has(`quote-${docId}`);
     if (incomingDoc) {
-      db.records = db.records.filter((record) => record.id !== `quote-${docId}`);
+      db.records = db.records.filter(
+        (record) =>
+          record.id !== `quote-${docId}` ||
+          !belongsToScope(record, scope)
+      );
     }
     if (incomingQuote) {
-      db.records = db.records.filter((record) => record.id !== `doc-${docId}`);
+      db.records = db.records.filter(
+        (record) =>
+          record.id !== `doc-${docId}` || !belongsToScope(record, scope)
+      );
     }
   }
 
   if (options?.draftOnlyDocIds?.length) {
     const draftOnly = new Set(options.draftOnlyDocIds);
     db.records = db.records.filter((record) => {
+      if (!belongsToScope(record, scope)) return true;
       for (const docId of draftOnly) {
         if (
           recordBelongsToDocument(record, docId) &&
@@ -318,8 +452,20 @@ export async function bulkUpsertRecords(
   if (options?.stripClientDocIds?.length) {
     const stripClients = new Set(options.stripClientDocIds);
     db.records = db.records.filter((record) => {
+      if (!belongsToScope(record, scope)) return true;
       for (const docId of stripClients) {
         if (record.id === `client-${docId}`) return false;
+      }
+      return true;
+    });
+  }
+
+  if (options?.stripDraftDocIds?.length) {
+    const stripDrafts = new Set(options.stripDraftDocIds);
+    db.records = db.records.filter((record) => {
+      if (!belongsToScope(record, scope)) return true;
+      for (const docId of stripDrafts) {
+        if (record.id === `draft-${docId}`) return false;
       }
       return true;
     });
@@ -330,10 +476,12 @@ export async function bulkUpsertRecords(
   return { upserted };
 }
 
-export async function getDatabaseStats() {
+export async function getDatabaseStats(scope: StorageScope) {
   const db = await readDatabase();
-  const summaries = await getBinSummaries();
-  const documentCount = db.records.filter((r) => r.binId === "documents").length;
+  const summaries = await getBinSummaries(scope);
+  const documentCount = scopedRecords(db, scope).filter(
+    (record) => record.binId === "documents"
+  ).length;
 
   return {
     totalRecords: documentCount,
@@ -347,3 +495,4 @@ export function parseBinId(value: string): DataBinId | null {
 }
 
 export { emptyDatabase, getStorageBackend } from "./databaseStore";
+export { recordProfileId } from "@/lib/storage/storage-scope";

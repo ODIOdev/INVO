@@ -8,6 +8,11 @@ export type CatalogClient = {
   email: string;
   phone: string;
   url: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  zipCode: string;
 };
 
 export function isNamedClient(
@@ -28,6 +33,45 @@ export function isNamedClientRecord(record: StoredRecord): boolean {
   });
 }
 
+/** Per-invoice client snapshots (client-{docId}) — not directory profiles. */
+export function isDocumentLinkedClientSnapshot(
+  record: StoredRecord
+): boolean {
+  if (record.binId !== "clients") return false;
+  if (record.id.startsWith("client-catalog-")) return false;
+  if (record.data.catalog === true) return false;
+
+  return (
+    record.id.startsWith("client-") &&
+    Boolean(record.data.documentId ?? record.data.draftId)
+  );
+}
+
+/** Canonical client directory entry shown in admin Clients. */
+export function isDirectoryClientRecord(record: StoredRecord): boolean {
+  if (record.binId !== "clients") return false;
+  if (!isNamedClientRecord(record)) return false;
+  return !isDocumentLinkedClientSnapshot(record);
+}
+
+export function clientDirectoryDataFromClientInfo(
+  client: ClientInfo
+): Record<string, unknown> {
+  return {
+    clientName: client.clientName.trim(),
+    companyName: client.companyName.trim(),
+    email: client.email.trim(),
+    phone: client.phone.trim(),
+    url: client.url.trim(),
+    addressLine1: client.addressLine1.trim(),
+    addressLine2: client.addressLine2.trim(),
+    city: client.city.trim(),
+    state: client.state.trim(),
+    zipCode: client.zipCode.trim(),
+    catalog: true,
+  };
+}
+
 export function parseCatalogClient(
   record: StoredRecord
 ): CatalogClient | null {
@@ -43,6 +87,11 @@ export function parseCatalogClient(
     email: String(record.data.email ?? ""),
     phone: String(record.data.phone ?? ""),
     url: String(record.data.url ?? ""),
+    addressLine1: String(record.data.addressLine1 ?? ""),
+    addressLine2: String(record.data.addressLine2 ?? ""),
+    city: String(record.data.city ?? ""),
+    state: String(record.data.state ?? ""),
+    zipCode: String(record.data.zipCode ?? ""),
   };
 }
 
@@ -52,7 +101,7 @@ export function catalogClientsFromRecords(
   const seen = new Set<string>();
 
   return records
-    .filter(isNamedClientRecord)
+    .filter(isDirectoryClientRecord)
     .map(parseCatalogClient)
     .filter((client): client is CatalogClient => {
       if (!client) return false;
@@ -66,13 +115,30 @@ export function catalogClientsFromRecords(
 
 export function clientFieldsFromCatalog(
   client: CatalogClient
-): Pick<ClientInfo, "clientName" | "companyName" | "email" | "phone" | "url"> {
+): Pick<
+  ClientInfo,
+  | "clientName"
+  | "companyName"
+  | "email"
+  | "phone"
+  | "url"
+  | "addressLine1"
+  | "addressLine2"
+  | "city"
+  | "state"
+  | "zipCode"
+> {
   return {
     clientName: client.clientName,
     companyName: client.companyName,
     email: client.email,
     phone: client.phone,
     url: client.url,
+    addressLine1: client.addressLine1,
+    addressLine2: client.addressLine2,
+    city: client.city,
+    state: client.state,
+    zipCode: client.zipCode,
   };
 }
 

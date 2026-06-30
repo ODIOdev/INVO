@@ -2,19 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { formatMoney } from "@/lib/drafts";
+import {
+  catalogLineItemsFromRecords,
+} from "@/lib/catalog-line-items";
 import type { StoredRecord } from "@/lib/storage/dataBins";
 import {
   deleteStoredRecord,
   upsertStorageRecord,
 } from "@/lib/storage/dbClient";
-
-type LineItemData = {
-  service: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  catalog?: boolean;
-};
 
 type AdminLineItemsPanelProps = {
   records: StoredRecord[];
@@ -91,18 +86,6 @@ function CurrencyInput({
   );
 }
 
-function parseLineItem(record: StoredRecord): LineItemData & { id: string } {
-  const data = record.data;
-  return {
-    id: record.id,
-    service: String(data.service ?? data.name ?? ""),
-    description: String(data.description ?? ""),
-    quantity: Number(data.quantity) || 1,
-    unitPrice: Number(data.unitPrice) || 0,
-    catalog: Boolean(data.catalog),
-  };
-}
-
 export default function AdminLineItemsPanel({
   records,
   loading,
@@ -116,10 +99,7 @@ export default function AdminLineItemsPanel({
   const [message, setMessage] = useState<string | null>(null);
 
   const lineItems = useMemo(
-    () =>
-      records
-        .map(parseLineItem)
-        .sort((a, b) => a.service.localeCompare(b.service)),
+    () => catalogLineItemsFromRecords(records),
     [records]
   );
 
@@ -184,7 +164,7 @@ export default function AdminLineItemsPanel({
     }
   };
 
-  const startEdit = (item: LineItemData & { id: string }) => {
+  const startEdit = (item: { id: string; service: string; description: string; quantity: number; unitPrice: number }) => {
     setEditingId(item.id);
     setEditForm({
       service: item.service,

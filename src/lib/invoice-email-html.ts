@@ -3,6 +3,7 @@ import {
   formatMoney,
   type DraftState,
 } from "@/lib/drafts";
+import { formatClientAddress, hasClientAddress } from "@/lib/client-form";
 
 function formatDisplayDate(value: string): string {
   if (!value) return "-";
@@ -202,8 +203,8 @@ export function generateInvoiceEmailHtml(
 
           <table width="100%" cellpadding="0" cellspacing="0" class="email-panel" style="border:1px solid #e4e4e7;border-radius:8px;${WHITE_BG}">
             <tr>
-              <td width="50%" valign="top" class="email-bg" style="padding:16px 20px;border-right:1px solid #e4e4e7;${WHITE_BG}">
-                <div class="email-label" style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">Bill To</div>
+              <td width="33%" valign="top" class="email-bg" style="padding:12px 14px;border-right:1px solid #e4e4e7;${WHITE_BG}">
+                <div class="email-label" style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Bill To</div>
                 <table width="100%" cellpadding="0" cellspacing="0">
                   ${fieldBlock("Name", client.clientName)}
                   ${fieldBlock("Company", client.companyName)}
@@ -212,8 +213,14 @@ export function generateInvoiceEmailHtml(
                   ${fieldBlock("Website", client.url)}
                 </table>
               </td>
-              <td width="50%" valign="top" class="email-bg" style="padding:16px 20px;${WHITE_BG}">
-                <div class="email-label" style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">Project Details</div>
+              <td width="33%" valign="top" class="email-bg" style="padding:12px 14px;border-right:1px solid #e4e4e7;${WHITE_BG}">
+                <div class="email-label" style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Address</div>
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  ${hasClientAddress(client) ? fieldBlock("Address", formatClientAddress(client).replace(/\n/g, ", ")) : fieldBlock("Address", "—")}
+                </table>
+              </td>
+              <td width="34%" valign="top" class="email-bg" style="padding:12px 14px;${WHITE_BG}">
+                <div class="email-label" style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Project Details</div>
                 <table width="100%" cellpadding="0" cellspacing="0">
                   ${fieldBlock("Project", client.projectName)}
                   ${fieldBlock(`${docType} #`, client.documentNumber)}

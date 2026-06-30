@@ -9,6 +9,7 @@ export type CatalogLineItem = {
 };
 
 export function isCatalogLineItemRecord(record: StoredRecord): boolean {
+  if (record.data.documentId) return false;
   if (record.data.catalog === true) return true;
   return record.id.startsWith("catalog-line-");
 }

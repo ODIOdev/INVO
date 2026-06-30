@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { formatClientAddress, hasClientAddress } from "@/lib/client-form";
 import {
   calculateDraftTotals,
   formatMoney,
@@ -146,54 +147,65 @@ function drawInfoBox(
   state: DraftState,
   startY: number
 ): number {
-  const colW = CONTENT_W / 2;
-  const leftX = MARGIN + 6;
-  const rightX = MARGIN + colW + 6;
+  const colW = CONTENT_W / 3;
+  const colXs = [MARGIN + 6, MARGIN + colW + 6, MARGIN + colW * 2 + 6];
   const innerW = colW - 12;
-  const pad = 6;
+  const pad = 5;
 
-  const leftFields = [
-    ["Name", state.client.clientName],
-    ["Company", state.client.companyName],
-    ["Email", state.client.email],
-    ["Phone", state.client.phone],
-    ["Website", state.client.url],
-  ] as const;
+  const columns = [
+    {
+      title: "Bill To",
+      fields: [
+        ["Name", state.client.clientName],
+        ["Company", state.client.companyName],
+        ["Email", state.client.email],
+        ["Phone", state.client.phone],
+        ["Website", state.client.url],
+      ] as const,
+    },
+    {
+      title: "Address",
+      fields: hasClientAddress(state.client)
+        ? ([["Address", formatClientAddress(state.client)]] as const)
+        : ([] as const),
+    },
+    {
+      title: "Project Details",
+      fields: [
+        ["Project", state.client.projectName],
+        [`${state.docType} #`, state.client.documentNumber],
+        ["Issued", formatDisplayDate(state.client.issueDate)],
+        ["Due", formatDisplayDate(state.client.dueDate)],
+      ] as const,
+    },
+  ];
 
-  const rightFields = [
-    ["Project", state.client.projectName],
-    [`${state.docType} #`, state.client.documentNumber],
-    ["Issued", formatDisplayDate(state.client.issueDate)],
-    ["Due", formatDisplayDate(state.client.dueDate)],
-  ] as const;
+  const colHeights = columns.map((column) => {
+    let height = 4;
+    for (const [, value] of column.fields) {
+      height += fieldHeight(pdf, value, innerW);
+    }
+    return height;
+  });
 
-  let leftH = 4;
-  let rightH = 4;
-  for (const [, value] of leftFields) {
-    leftH += fieldHeight(pdf, value, innerW);
-  }
-  for (const [, value] of rightFields) {
-    rightH += fieldHeight(pdf, value, innerW);
-  }
-
-  const boxH = Math.max(leftH, rightH) + pad * 2;
+  const boxH = Math.max(...colHeights, 18) + pad * 2;
 
   drawBox(pdf, MARGIN, startY, CONTENT_W, boxH, [252, 252, 252]);
   pdf.setDrawColor(220, 220, 220);
   pdf.setLineWidth(0.3);
   pdf.line(MARGIN + colW, startY, MARGIN + colW, startY + boxH);
+  pdf.line(MARGIN + colW * 2, startY, MARGIN + colW * 2, startY + boxH);
 
-  let leftY = startY + pad;
-  let rightY = startY + pad;
-  leftY = sectionLabel(pdf, "Bill To", leftX, leftY);
-  rightY = sectionLabel(pdf, "Project Details", rightX, rightY);
-
-  for (const [label, value] of leftFields) {
-    leftY = compactField(pdf, label, value, leftX, leftY, innerW);
-  }
-  for (const [label, value] of rightFields) {
-    rightY = compactField(pdf, label, value, rightX, rightY, innerW);
-  }
+  columns.forEach((column, index) => {
+    let y = startY + pad;
+    y = sectionLabel(pdf, column.title, colXs[index], y);
+    for (const [label, value] of column.fields) {
+      y = compactField(pdf, label, value, colXs[index], y, innerW);
+    }
+    if (column.title === "Address" && column.fields.length === 0) {
+      compactField(pdf, "Address", "—", colXs[index], y, innerW);
+    }
+  });
 
   return startY + boxH + SP.afterBox;
 }

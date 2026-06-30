@@ -9,7 +9,9 @@ import InvoicePaperHeader from "@/components/InvoicePaperHeader";
 import EmailSetupNotice from "@/components/EmailSetupNotice";
 import SmsSetupNotice from "@/components/SmsSetupNotice";
 import CatalogLineItemPicker from "@/components/CatalogLineItemPicker";
+import CatalogSystemPicker from "@/components/CatalogSystemPicker";
 import ClientNameAutocomplete from "@/components/ClientNameAutocomplete";
+import ClientAddressFields from "@/components/ClientAddressFields";
 import {
   createDefaultState,
   calculateDraftTotals,
@@ -22,11 +24,16 @@ import {
   type DocType,
   type DraftState,
   type ServiceItem,
+  type TaxRatePercent,
 } from "@/lib/drafts";
 import {
   type CatalogLineItem,
   catalogLineItemsFromRecords,
 } from "@/lib/catalog-line-items";
+import {
+  type CatalogSystem,
+  catalogSystemsFromRecords,
+} from "@/lib/catalog-systems";
 import {
   type CatalogClient,
   catalogClientsFromRecords,
@@ -40,6 +47,8 @@ import {
   fetchBinRecords,
   finalizeCompletedInvoice,
   finalizeCompletedQuote,
+  clearAdminReturnPath,
+  getAdminReturnPath,
   loadOpenedSubmission,
   syncToInternalDatabase,
 } from "@/lib/storage/dbClient";
@@ -106,8 +115,10 @@ export default function InvoiceSystem() {
   );
   const [smsConfigured, setSmsConfigured] = useState<boolean | null>(null);
   const [catalogItems, setCatalogItems] = useState<CatalogLineItem[]>([]);
+  const [catalogSystems, setCatalogSystems] = useState<CatalogSystem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogClients, setCatalogClients] = useState<CatalogClient[]>([]);
+  const [adminReturnPath, setAdminReturnPath] = useState<string | null>(null);
 
   const {
     docType,
@@ -120,6 +131,10 @@ export default function InvoiceSystem() {
     deposit,
     notes,
   } = state;
+
+  useEffect(() => {
+    setAdminReturnPath(getAdminReturnPath());
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -137,6 +152,15 @@ export default function InvoiceSystem() {
       })
       .catch(() => {
         if (active) setCatalogItems([]);
+      });
+
+    fetchBinRecords("labor")
+      .then((data: { records?: StoredRecord[] }) => {
+        if (!active) return;
+        setCatalogSystems(catalogSystemsFromRecords(data.records ?? []));
+      })
+      .catch(() => {
+        if (active) setCatalogSystems([]);
       })
       .finally(() => {
         if (active) setCatalogLoading(false);
@@ -169,6 +193,10 @@ export default function InvoiceSystem() {
   const updateClient = (field: keyof ClientInfo, value: string) => {
     setState((prev) => ({
       ...prev,
+      catalogClientId:
+        field === "clientName" || field === "email" || field === "companyName"
+          ? undefined
+          : prev.catalogClientId,
       client: { ...prev.client, [field]: value },
     }));
   };
@@ -176,6 +204,7 @@ export default function InvoiceSystem() {
   const applyCatalogClient = (catalog: CatalogClient) => {
     setState((prev) => ({
       ...prev,
+      catalogClientId: catalog.id,
       client: {
         ...prev.client,
         ...clientFieldsFromCatalog(catalog),
@@ -593,9 +622,23 @@ export default function InvoiceSystem() {
                 </button>
               ))}
             </div>
-            <Link href="/admin" className="btn-outline text-xs">
-              Dashboard
-            </Link>
+            {adminReturnPath ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const path = adminReturnPath;
+                  clearAdminReturnPath();
+                  router.push(path);
+                }}
+                className="btn-outline inline-flex items-center gap-1 text-xs"
+              >
+                ← Back
+              </button>
+            ) : (
+              <Link href="/admin" className="btn-outline text-xs">
+                Dashboard
+              </Link>
+            )}
           </div>
         </div>
       </nav>
@@ -612,52 +655,57 @@ export default function InvoiceSystem() {
             <div className="paper-divider" />
 
             {/* Client + meta */}
-            <div className="grid gap-10 sm:grid-cols-2">
-              <div>
-                <p className="doc-heading mb-4">Bill To</p>
-                <div className="space-y-3">
-                  <Field label="Name">
+            <div className="invoice-meta-grid">
+              <div className="invoice-meta-card">
+                <p className="invoice-meta-card-title">Bill To</p>
+                <div className="space-y-1.5">
+                  <Field label="Name" compact>
                     <ClientNameAutocomplete
                       clients={catalogClients}
                       value={client.clientName}
                       onChange={(value) => updateClient("clientName", value)}
                       onSelect={applyCatalogClient}
+                      compact
                     />
                   </Field>
-                  <Field label="Company">
+                  <Field label="Company" compact>
                     <input
-                      className="field"
+                      className="field field-compact"
                       placeholder="Company name"
                       value={client.companyName}
-                      onChange={(e) => updateClient("companyName", e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Email">
-                    <input
-                      className="field"
-                      type="email"
-                      placeholder="email@company.com"
-                      value={client.email}
-                      onChange={(e) => updateClient("email", e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Phone">
-                    <input
-                      className="field"
-                      type="tel"
-                      inputMode="tel"
-                      placeholder="(555) 123-4567"
-                      value={formatPhoneNumber(client.phone ?? "")}
                       onChange={(e) =>
-                        updateClient("phone", formatPhoneNumber(e.target.value))
+                        updateClient("companyName", e.target.value)
                       }
                     />
                   </Field>
-                  <Field label="Website">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Field label="Email" compact>
+                      <input
+                        className="field field-compact"
+                        type="email"
+                        placeholder="email@company.com"
+                        value={client.email}
+                        onChange={(e) => updateClient("email", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Phone" compact>
+                      <input
+                        className="field field-compact"
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="(555) 123-4567"
+                        value={formatPhoneNumber(client.phone ?? "")}
+                        onChange={(e) =>
+                          updateClient("phone", formatPhoneNumber(e.target.value))
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Website" compact>
                     <input
-                      className="field"
+                      className="field field-compact"
                       type="url"
-                      placeholder="https://"
+                      placeholder="https://example.com"
                       value={client.url ?? ""}
                       onChange={(e) => updateClient("url", e.target.value)}
                     />
@@ -665,61 +713,68 @@ export default function InvoiceSystem() {
                 </div>
               </div>
 
-              <div>
-                <p className="doc-heading mb-4">Project Details</p>
-                <div className="space-y-3">
-                  <Field label="Project Name">
-                    <input
-                      className="field"
-                      placeholder="Project name"
-                      value={client.projectName}
-                      onChange={(e) => updateClient("projectName", e.target.value)}
-                    />
-                  </Field>
-                  <Field label={`${docType} Number`}>
-                    <input
-                      className="field"
-                      placeholder="INV-000001"
-                      value={client.documentNumber}
-                      onChange={(e) =>
-                        updateClient("documentNumber", e.target.value)
-                      }
-                    />
-                  </Field>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Issue Date">
+              <div className="invoice-meta-card">
+                <p className="invoice-meta-card-title">Address</p>
+                <ClientAddressFields
+                  values={client}
+                  onChange={updateClient}
+                  idPrefix="invoice-address"
+                  compact
+                />
+              </div>
+
+              <div className="invoice-meta-card">
+                <p className="invoice-meta-card-title">Project Details</p>
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Field label="Project" compact>
                       <input
-                        className="field"
-                        type="date"
-                        value={client.issueDate}
-                        onChange={(e) => updateClient("issueDate", e.target.value)}
+                        className="field field-compact"
+                        placeholder="Project name"
+                        value={client.projectName}
+                        onChange={(e) =>
+                          updateClient("projectName", e.target.value)
+                        }
                       />
                     </Field>
-                    <Field label="Due Date">
+                    <Field label={`${docType} #`} compact>
                       <input
-                        className="field"
+                        className="field field-compact"
+                        placeholder="INV-000001"
+                        value={client.documentNumber}
+                        onChange={(e) =>
+                          updateClient("documentNumber", e.target.value)
+                        }
+                      />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Field label="Issue Date" compact>
+                      <input
+                        className="field field-compact"
+                        type="date"
+                        value={client.issueDate}
+                        onChange={(e) =>
+                          updateClient("issueDate", e.target.value)
+                        }
+                      />
+                    </Field>
+                    <Field label="Due Date" compact>
+                      <input
+                        className="field field-compact"
                         type="date"
                         value={client.dueDate}
                         onChange={(e) => updateClient("dueDate", e.target.value)}
                       />
                     </Field>
                   </div>
-                  <Field label="Tax Rate">
-                    <select
+                  <Field label="Tax Rate" compact>
+                    <TaxRatePills
                       value={normalizeTaxRate(taxRate)}
-                      onChange={(e) =>
-                        setState((prev) => ({
-                          ...prev,
-                          taxRate: Number(e.target.value),
-                        }))
+                      onChange={(rate) =>
+                        setState((prev) => ({ ...prev, taxRate: rate }))
                       }
-                      className="select-field"
-                    >
-                      <option value={0}>No tax</option>
-                      <option value={7}>7%</option>
-                      <option value={8}>8%</option>
-                      <option value={9}>9%</option>
-                    </select>
+                    />
                   </Field>
                 </div>
               </div>
@@ -730,7 +785,7 @@ export default function InvoiceSystem() {
             {/* Services */}
             <div>
               <div className="mb-4 flex items-center justify-between gap-3">
-                <p className="doc-heading">Line Items</p>
+                <p className="doc-heading section-accent-title">Line Items</p>
                 <div className="flex items-center gap-2 no-print">
                   <CatalogLineItemPicker
                     items={catalogItems}
@@ -915,7 +970,25 @@ export default function InvoiceSystem() {
             {/* Labor + Totals */}
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="info-card">
-                <p className="info-card-heading">Systems | Applications</p>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="info-card-heading section-accent-title mb-0">
+                    Systems | Applications
+                  </p>
+                  <CatalogSystemPicker
+                    items={catalogSystems}
+                    loading={catalogLoading}
+                    onSelect={(catalog) =>
+                      setState((prev) => ({
+                        ...prev,
+                        laborTitle: catalog.description
+                          ? `${catalog.title} — ${catalog.description}`
+                          : catalog.title,
+                        laborHours: catalog.hours,
+                        laborRate: catalog.rate,
+                      }))
+                    }
+                  />
+                </div>
                 <div className="space-y-3">
                   <Field label="Description">
                     <input
@@ -973,7 +1046,7 @@ export default function InvoiceSystem() {
               </div>
 
               <div className="info-card">
-                <p className="info-card-heading">Summary</p>
+                <p className="info-card-heading section-accent-title">Summary</p>
                 <div className="totals-panel">
                   <SummaryRow
                     label="Services"
@@ -1019,7 +1092,7 @@ export default function InvoiceSystem() {
 
             {/* Notes */}
             <div>
-              <p className="doc-heading mb-3">Notes & Terms</p>
+              <p className="doc-heading section-accent-title mb-3">Notes & Terms</p>
               <textarea
                 className="field min-h-[96px] resize-y"
                 placeholder="Payment terms, scope notes, delivery timeline…"
@@ -1175,16 +1248,47 @@ function Field({
   label,
   children,
   className,
+  compact = false,
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
+  compact?: boolean;
 }) {
   return (
     <label className={`block min-w-0 ${className ?? ""}`}>
-      <span className="doc-label">{label}</span>
+      <span className={compact ? "doc-label text-[9px]" : "doc-label"}>
+        {label}
+      </span>
       {children}
     </label>
+  );
+}
+
+const TAX_RATE_OPTIONS: TaxRatePercent[] = [0, 7, 8, 9];
+
+function TaxRatePills({
+  value,
+  onChange,
+}: {
+  value: TaxRatePercent;
+  onChange: (rate: TaxRatePercent) => void;
+}) {
+  return (
+    <div className="tax-rate-pills" role="radiogroup" aria-label="Tax rate">
+      {TAX_RATE_OPTIONS.map((rate) => (
+        <button
+          key={rate}
+          type="button"
+          role="radio"
+          aria-checked={value === rate}
+          className={`tax-rate-pill ${value === rate ? "tax-rate-pill-active" : ""}`}
+          onClick={() => onChange(rate)}
+        >
+          {rate === 0 ? "None" : `${rate}%`}
+        </button>
+      ))}
+    </div>
   );
 }
 

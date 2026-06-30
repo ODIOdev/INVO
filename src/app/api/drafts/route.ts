@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import type { DraftState, SavedDraft } from "@/lib/drafts";
+import { requireStorageScope } from "@/lib/storage/storage-auth";
 import { getRecordsByBin } from "@/lib/storage/internalDatabase";
 
 export async function GET() {
-  const records = await getRecordsByBin("drafts");
+  const scopeResult = await requireStorageScope();
+  if (scopeResult instanceof NextResponse) return scopeResult;
+
+  const records = await getRecordsByBin(scopeResult, "drafts");
 
   const drafts: SavedDraft[] = records
     .map((record) => {

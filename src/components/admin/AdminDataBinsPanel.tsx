@@ -1,19 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminClientOnboardModal from "@/components/admin/AdminClientOnboardModal";
 import AdminClientsPanel from "@/components/admin/AdminClientsPanel";
 import AdminDashboardPanel from "@/components/admin/AdminDashboardPanel";
+import AdminDocumentDetailModal from "@/components/admin/AdminDocumentDetailModal";
 import AdminIntegrationsPanel, {
   type AdminIntegrationsInfo,
 } from "@/components/admin/AdminIntegrationsPanel";
 import AdminLineItemsPanel from "@/components/admin/AdminLineItemsPanel";
+import AdminSystemsApplicationsPanel from "@/components/admin/AdminSystemsApplicationsPanel";
+import AdminProfileTag from "@/components/admin/AdminProfileTag";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminIcon from "@/components/admin/AdminIcons";
-import { isDataBinView, type AdminView } from "@/components/admin/admin-nav";
+import {
+  adminReturnHref,
+  adminReturnLabel,
+  adminViewPath,
+  isDataBinView,
+  isDocumentBin,
+  parseAdminReturnFrom,
+  type AdminReturnFrom,
+  type AdminView,
+} from "@/components/admin/admin-nav";
+import { activityIconName } from "@/lib/admin-icons";
 import type { AdminDashboardStats } from "@/lib/admin-dashboard";
+import {
+  documentMatchesStatusFilter,
+  getDocumentListRowMeta,
+  statusTabClass,
+  type DocumentStatusFilter,
+} from "@/lib/document-list-meta";
 import {
   DATA_BINS,
   type BinSummary,
@@ -24,7 +43,6 @@ import {
   deleteStoredRecord,
   fetchBinRecords,
   fetchBinSummaries,
-  openSubmissionInEditor,
 } from "@/lib/storage/dbClient";
 
 type AdminDataBinsPanelProps = {
@@ -35,11 +53,6 @@ type AdminDataBinsPanelProps = {
   integrations: AdminIntegrationsInfo;
 };
 
-function adminViewPath(view: AdminView): string {
-  if (view === "home") return "/admin";
-  return `/admin?view=${view}`;
-}
-
 export default function AdminDataBinsPanel({
   initialBins,
   initialRecords,
@@ -48,16 +61,70 @@ export default function AdminDataBinsPanel({
   integrations,
 }: AdminDataBinsPanelProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnFrom = parseAdminReturnFrom(searchParams.get("from"));
   const [bins, setBins] = useState<BinSummary[]>(initialBins);
   const [activeView, setActiveView] = useState<AdminView>(initialView);
   const [records, setRecords] = useState<StoredRecord[]>(initialRecords);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [openingId, setOpeningId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [clientModalOpen, setClientModalOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<StoredRecord | null>(
+    null
+  );
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(
+    null
+  );
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [documentFilter, setDocumentFilter] =
+    useState<DocumentStatusFilter>("all");
 
   const selectedBin = isDataBinView(activeView) ? activeView : null;
+
+  useEffect(() => {
+    setDocumentFilter("all");
+  }, [selectedBin]);
+
+  const documentFilterOptions = useMemo((): Array<{
+    id: DocumentStatusFilter;
+    label: string;
+  }> => {
+    if (selectedBin === "documents") {
+      return [
+        { id: "all", label: "All" },
+        { id: "open", label: "Open" },
+        { id: "closed", label: "Closed" },
+        { id: "overdue", label: "Overdue" },
+      ];
+    }
+    if (selectedBin === "quotes") {
+      return [
+        { id: "all", label: "All" },
+        { id: "quote", label: "Quotes" },
+      ];
+    }
+    if (selectedBin === "drafts") {
+      return [
+        { id: "all", label: "All" },
+        { id: "draft", label: "Drafts" },
+      ];
+    }
+    return [];
+  }, [selectedBin]);
+
+  const filteredDocumentRecords = useMemo(() => {
+    if (!selectedBin || !isDocumentBin(selectedBin)) return records;
+    return records.filter((record) =>
+      documentMatchesStatusFilter(record, documentFilter)
+    );
+  }, [documentFilter, records, selectedBin]);
+
+  useEffect(() => {
+    setActiveView(initialView);
+    if (isDataBinView(initialView)) {
+      setRecords(initialRecords);
+    }
+  }, [initialView, initialRecords]);
 
   const loadBins = useCallback(async () => {
     const data = await fetchBinSummaries();
@@ -88,11 +155,15 @@ export default function AdminDataBinsPanel({
     router.refresh();
   }, [loadBins, loadRecords, selectedBin, router]);
 
-  const handleSelectBin = async (binId: DataBinId) => {
+  const handleSelectBin = async (
+    binId: DataBinId,
+    from?: AdminReturnFrom | null
+  ) => {
     setActiveView(binId);
     setExpandedId(null);
+    setSelectedDocument(null);
     setMessage(null);
-    router.replace(adminViewPath(binId));
+    router.replace(adminViewPath(binId, from));
     setLoading(true);
     try {
       await loadRecords(binId);
@@ -101,18 +172,40 @@ export default function AdminDataBinsPanel({
     }
   };
 
+  const handleSelectBinFromSidebar = (binId: DataBinId) => {
+    void handleSelectBin(binId);
+  };
+
+  const handleSelectBinFromDashboard = (binId: DataBinId) => {
+    void handleSelectBin(binId, "dashboard");
+  };
+
   const handleSelectHome = () => {
     setActiveView("home");
     setExpandedId(null);
+    setSelectedDocument(null);
     setMessage(null);
     router.replace("/admin");
   };
 
-  const handleSelectIntegrations = () => {
+  const handleSelectIntegrations = (from?: AdminReturnFrom | null) => {
     setActiveView("integrations");
     setExpandedId(null);
+    setSelectedDocument(null);
     setMessage(null);
-    router.replace(adminViewPath("integrations"));
+    router.replace(adminViewPath("integrations", from));
+  };
+
+  const handleSelectIntegrationsFromSidebar = () => {
+    handleSelectIntegrations();
+  };
+
+  const handleBackNavigation = () => {
+    if (returnFrom) {
+      router.push(adminReturnHref(returnFrom));
+      return;
+    }
+    handleSelectHome();
   };
 
   const handleDelete = async (id: string) => {
@@ -121,24 +214,60 @@ export default function AdminDataBinsPanel({
     await refresh();
   };
 
-  const handleOpen = async (record: StoredRecord) => {
-    setOpeningId(record.id);
+  const handleDocumentQuickDelete = async (record: StoredRecord) => {
+    if (
+      !window.confirm(`Delete "${record.label}" from the internal database?`)
+    ) {
+      return;
+    }
+
+    setDeletingDocumentId(record.id);
     setMessage(null);
     try {
-      const opened = await openSubmissionInEditor(record);
-      if (opened) {
-        router.push("/invoice");
-      } else {
-        setMessage(
-          "This record cannot be opened in the editor. Try opening from the Drafts or Documents bin."
-        );
+      await deleteStoredRecord(record.id);
+      if (selectedDocument?.id === record.id) {
+        setSelectedDocument(null);
       }
+      await refresh();
     } catch {
-      setMessage("Failed to open submission");
+      setMessage("Failed to delete record.");
     } finally {
-      setOpeningId(null);
+      setDeletingDocumentId(null);
     }
   };
+
+  const handleDocumentDeleted = useCallback(async () => {
+    await refresh();
+    router.refresh();
+  }, [refresh, router]);
+
+  const handleDocumentUpdated = useCallback(async () => {
+    if (!selectedBin || !selectedDocument) {
+      await refresh();
+      router.refresh();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await loadBins();
+      const data = await fetchBinRecords(selectedBin);
+      setRecords(data.records);
+      const fresh = data.records.find(
+        (entry: StoredRecord) => entry.id === selectedDocument.id
+      );
+      if (fresh) setSelectedDocument(fresh);
+    } finally {
+      setLoading(false);
+    }
+    router.refresh();
+  }, [
+    loadBins,
+    refresh,
+    router,
+    selectedBin,
+    selectedDocument,
+  ]);
 
   const handleClientSaved = useCallback(async () => {
     await loadBins();
@@ -176,6 +305,12 @@ export default function AdminDataBinsPanel({
         onClose={() => setClientModalOpen(false)}
         onSaved={handleClientSaved}
       />
+      <AdminDocumentDetailModal
+        record={selectedDocument}
+        onClose={() => setSelectedDocument(null)}
+        onDeleted={handleDocumentDeleted}
+        onUpdated={handleDocumentUpdated}
+      />
       <header className="admin-header">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
           <div>
@@ -185,6 +320,7 @@ export default function AdminDataBinsPanel({
             <h1 className="text-lg font-semibold text-zinc-900">Dashboard</h1>
           </div>
           <nav className="flex flex-wrap items-center gap-2">
+            <AdminProfileTag />
             <Link href="/" className="btn-outline text-xs">
               Website
             </Link>
@@ -200,16 +336,49 @@ export default function AdminDataBinsPanel({
           bins={bins}
           activeView={activeView}
           onSelectHome={handleSelectHome}
-          onSelectBin={handleSelectBin}
-          onSelectIntegrations={handleSelectIntegrations}
+          onSelectBin={handleSelectBinFromSidebar}
+          onSelectIntegrations={handleSelectIntegrationsFromSidebar}
         />
 
         <main className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
           {showPanelHeader && (
             <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-4">
               <div className="min-w-0">
+                {returnFrom ? (
+                  <button
+                    type="button"
+                    onClick={handleBackNavigation}
+                    className="admin-back-button mb-2"
+                  >
+                    <AdminIcon name="chevron-left" size={14} />
+                    Back to {adminReturnLabel(returnFrom)}
+                  </button>
+                ) : null}
                 <h2 className="text-base font-semibold text-zinc-900">{mainTitle}</h2>
                 <p className="text-sm text-zinc-500">{mainDescription}</p>
+                {selectedBin && isDocumentBin(selectedBin) ? (
+                  <div
+                    className="admin-doc-filter-bar"
+                    role="group"
+                    aria-label="Filter documents by status"
+                  >
+                    {documentFilterOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={
+                          documentFilter === option.id
+                            ? "admin-doc-filter-pill admin-doc-filter-pill-active"
+                            : "admin-doc-filter-pill"
+                        }
+                        aria-pressed={documentFilter === option.id}
+                        onClick={() => setDocumentFilter(option.id)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               {activeView === "clients" ? (
                 <button
@@ -233,19 +402,26 @@ export default function AdminDataBinsPanel({
             <AdminDashboardPanel
               stats={dashboardStats}
               onClientSaved={handleDashboardRefresh}
+              onSelectBin={handleSelectBinFromDashboard}
             />
           ) : activeView === "integrations" ? (
             <AdminIntegrationsPanel integrations={integrations} />
           ) : (
             <div
               className={
-                selectedBin === "lineItems" || selectedBin === "clients"
+                selectedBin === "lineItems" || selectedBin === "labor" || selectedBin === "clients"
                   ? ""
                   : "p-6"
               }
             >
               {selectedBin === "lineItems" ? (
                 <AdminLineItemsPanel
+                  records={records}
+                  loading={loading}
+                  onRefresh={refresh}
+                />
+              ) : selectedBin === "labor" ? (
+                <AdminSystemsApplicationsPanel
                   records={records}
                   loading={loading}
                   onRefresh={refresh}
@@ -265,6 +441,73 @@ export default function AdminDataBinsPanel({
                     Save data from the invoice app to add records.
                   </p>
                 </div>
+              ) : selectedBin && isDocumentBin(selectedBin) ? (
+                filteredDocumentRecords.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-6 py-12 text-center">
+                    <p className="text-sm font-medium text-zinc-700">
+                      No matching records
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Try a different status filter.
+                    </p>
+                  </div>
+                ) : (
+                <ul className="space-y-2">
+                  {filteredDocumentRecords.map((record) => {
+                    const rowMeta = getDocumentListRowMeta(record);
+                    const iconName = activityIconName(
+                      record.binId === "quotes"
+                        ? "Quote"
+                        : record.binId === "drafts"
+                          ? "Draft"
+                          : "Invoice"
+                    );
+
+                    return (
+                      <li
+                        key={record.id}
+                        className="admin-client-row group flex items-center gap-1"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDocument(record)}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left sm:gap-4"
+                        >
+                          <span className="admin-dash-action-icon shrink-0">
+                            <AdminIcon name={iconName} size={18} />
+                          </span>
+                          <span className="admin-client-info">
+                            <span className="admin-client-name">
+                              {record.label}
+                            </span>
+                            <span className="admin-client-meta">
+                              {rowMeta.metaLine}
+                            </span>
+                          </span>
+                          <span className={statusTabClass(rowMeta.status)}>
+                            {rowMeta.status}
+                          </span>
+                          <AdminIcon
+                            name="chevron-right"
+                            size={16}
+                            className="admin-client-chevron"
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDocumentQuickDelete(record)}
+                          disabled={deletingDocumentId === record.id}
+                          className="mr-2 shrink-0 rounded-lg p-2 text-zinc-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                          aria-label={`Delete ${record.label}`}
+                          title="Delete"
+                        >
+                          <AdminIcon name="trash" size={16} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                )
               ) : (
                 <ul className="space-y-2">
                   {records.map((record) => (
@@ -276,8 +519,11 @@ export default function AdminDataBinsPanel({
                         <button
                           type="button"
                           className="min-w-0 flex-1 text-left"
-                          onClick={() => handleOpen(record)}
-                          disabled={openingId === record.id}
+                          onClick={() =>
+                            setExpandedId(
+                              expandedId === record.id ? null : record.id
+                            )
+                          }
                         >
                           <p className="truncate text-sm font-medium text-zinc-900">
                             {record.label}
@@ -286,40 +532,14 @@ export default function AdminDataBinsPanel({
                             {record.source} ·{" "}
                             {new Date(record.updatedAt).toLocaleString()}
                           </p>
-                          <p className="mt-1 text-xs font-medium text-blue-600">
-                            {openingId === record.id
-                              ? "Opening…"
-                              : "Click to open in editor →"}
-                          </p>
                         </button>
-                        <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
-                          <button
-                            type="button"
-                            onClick={() => handleOpen(record)}
-                            disabled={openingId === record.id}
-                            className="btn px-3 py-1.5 text-xs"
-                          >
-                            Open
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExpandedId(
-                                expandedId === record.id ? null : record.id
-                              )
-                            }
-                            className="btn-outline px-3 py-1.5 text-xs"
-                          >
-                            Details
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(record.id)}
-                            className="btn-ghost text-xs"
-                          >
-                            Delete
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(record.id)}
+                          className="btn-ghost text-xs"
+                        >
+                          Delete
+                        </button>
                       </div>
                       {expandedId === record.id && (
                         <pre className="overflow-x-auto border-t border-zinc-100 bg-white px-4 py-3 text-xs text-zinc-700">

@@ -42,6 +42,10 @@ body {
   @apply inline-flex rounded-lg bg-zinc-100 p-1;
 }
 
+.segmented.w-full {
+  @apply flex w-full;
+}
+
 .segmented-btn {
   @apply rounded-md px-4 py-1.5 text-sm font-medium text-zinc-500 transition;
 }
@@ -129,11 +133,27 @@ body {
 }
 
 .catalog-picker-square {
-  @apply h-9 w-9 cursor-pointer appearance-none rounded border border-zinc-200 bg-zinc-50/50 text-[13px] text-zinc-900 transition hover:border-zinc-300 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40;
+  @apply h-9 w-9 cursor-pointer appearance-none rounded border border-zinc-200 bg-zinc-50/50 transition hover:border-zinc-300 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M4 6h16M4 12h16M4 18h16'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
   background-size: 0.95rem;
+}
+
+.catalog-picker-menu {
+  @apply min-w-[12.5rem] overflow-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg;
+}
+
+.catalog-picker-menu-floating {
+  @apply fixed z-[100] max-h-52 overflow-y-auto;
+}
+
+.catalog-picker-menu-heading {
+  @apply border-b border-zinc-100 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-zinc-300;
+}
+
+.catalog-picker-menu-option {
+  @apply w-full px-3 py-2 text-left text-sm text-zinc-900 transition hover:bg-zinc-50;
 }
 
 .catalog-picker-table {
@@ -199,6 +219,69 @@ body {
   @apply border-b-0;
 }
 
+/* ── Invoice meta cards (bill to, project, address) ── */
+.invoice-meta-grid {
+  @apply grid items-stretch gap-3 lg:grid-cols-3;
+}
+
+.invoice-meta-card {
+  @apply flex h-full min-w-0 flex-col rounded-xl border border-zinc-200/90 bg-gradient-to-b from-zinc-50/60 to-white p-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+}
+
+.section-accent-title,
+.invoice-meta-card-title {
+  @apply flex items-center gap-2;
+}
+
+.section-accent-title::before,
+.invoice-meta-card-title::before {
+  content: "";
+  @apply h-3.5 w-0.5 shrink-0 rounded-full bg-blue-500/75;
+}
+
+.invoice-meta-card-title {
+  @apply mb-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500;
+}
+
+.invoice-meta-card .doc-label {
+  @apply mb-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-zinc-400;
+}
+
+.invoice-meta-card .field,
+.invoice-meta-card .select-field,
+.field-compact {
+  @apply py-1 px-2.5 text-[12px];
+}
+
+.invoice-meta-card .field,
+.invoice-meta-card .select-field {
+  @apply border-zinc-200/90 bg-white shadow-sm;
+}
+
+.invoice-meta-card .field-table {
+  @apply text-[12px];
+}
+
+.invoice-address-compact {
+  @apply space-y-1.5;
+}
+
+.invoice-address-row {
+  @apply grid grid-cols-[minmax(0,1fr)_2.5rem_4rem] gap-1.5;
+}
+
+.tax-rate-pills {
+  @apply flex rounded-lg border border-zinc-200 bg-zinc-100/80 p-0.5;
+}
+
+.tax-rate-pill {
+  @apply flex-1 rounded-md px-1 py-1 text-center text-[11px] font-medium text-zinc-500 transition hover:text-zinc-700;
+}
+
+.tax-rate-pill-active {
+  @apply bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200/80;
+}
+
 /* ── Info cards (labor, summary) ── */
 .info-card {
   @apply rounded-lg border border-zinc-200 bg-zinc-50/80 p-5;
@@ -237,6 +320,22 @@ body {
 /* ── Admin shell ── */
 .admin-header {
   @apply sticky top-0 z-50 border-b border-black/[0.06] bg-white/95 backdrop-blur-md;
+}
+
+.admin-back-button {
+  @apply inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800;
+}
+
+.admin-profile-tag {
+  @apply inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold tracking-wide;
+}
+
+.admin-profile-tag-master {
+  @apply border-violet-200/80 bg-violet-100/90 text-violet-700;
+}
+
+.admin-profile-tag-user {
+  @apply border-sky-200/80 bg-sky-100/90 text-sky-700;
 }
 
 .admin-sidebar-card {
@@ -567,6 +666,163 @@ body {
   @apply flex w-full items-center justify-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-white;
 }
 
+/* ── Balance breakdown donut ── */
+.admin-balance-card {
+  @apply relative overflow-hidden rounded-xl border border-amber-200/35 bg-gradient-to-br from-amber-50/70 via-white to-zinc-50/90 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(251,191,36,0.25)];
+}
+
+.admin-balance-card-glow {
+  @apply pointer-events-none absolute rounded-full opacity-40 blur-3xl;
+}
+
+.admin-balance-card-glow-amber {
+  @apply -right-6 -top-8 h-24 w-24 bg-amber-300/80;
+}
+
+.admin-balance-card-glow-emerald {
+  @apply -bottom-10 -left-6 h-20 w-20 bg-emerald-300/60;
+}
+
+.admin-balance-card-body {
+  @apply relative z-[1] p-5;
+}
+
+.admin-balance-card-header {
+  @apply relative;
+}
+
+.admin-balance-card-title-row {
+  @apply flex items-start gap-3;
+}
+
+.admin-balance-card-icon {
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/90 text-amber-600 shadow-sm ring-1 ring-amber-200/60;
+}
+
+.admin-balance-card-footer {
+  @apply mt-4 flex items-center justify-between gap-4 rounded-lg border border-white/70 bg-white/75 px-3.5 py-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9),0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur-sm;
+}
+
+.admin-balance-card-footer-amount {
+  @apply text-lg font-bold tabular-nums text-amber-700;
+}
+
+.admin-balance-card .balance-breakdown-donut-mt {
+  @apply mt-5;
+}
+
+.balance-breakdown-donut {
+  @apply flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center;
+}
+
+.balance-breakdown-donut-mt {
+  @apply mt-12;
+}
+
+.balance-breakdown-donut-mt-compact {
+  @apply mt-4;
+}
+
+.balance-breakdown-chart {
+  @apply relative shrink-0 rounded-full bg-gradient-to-br from-zinc-50 to-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.04)];
+}
+
+.balance-breakdown-arc {
+  transition: opacity 0.15s ease;
+}
+
+.balance-breakdown-center {
+  @apply pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-3 text-center transition-opacity duration-150;
+}
+
+.balance-breakdown-center-active {
+  @apply gap-0.5;
+}
+
+.balance-breakdown-center-dot {
+  @apply mb-0.5 h-2 w-2 shrink-0 rounded-full;
+}
+
+.balance-breakdown-center-title {
+  @apply text-[10px] font-semibold uppercase tracking-wide text-zinc-500;
+}
+
+.balance-breakdown-center-amount {
+  @apply text-xs font-semibold tabular-nums text-zinc-800;
+}
+
+.balance-legend-row-hovered {
+  @apply ring-2 ring-zinc-300/80 ring-offset-1;
+}
+
+.balance-breakdown-legend {
+  @apply grid w-full min-w-[148px] gap-1.5 sm:w-auto sm:min-w-[188px];
+}
+
+.balance-legend-row {
+  @apply flex items-center justify-between gap-2 rounded-md border px-3 py-1.5;
+}
+
+.balance-legend-row-open {
+  @apply border-amber-200/70 bg-amber-50/50;
+}
+
+.balance-legend-row-closed {
+  @apply border-emerald-200/70 bg-emerald-50/40;
+}
+
+.balance-legend-row-overdue {
+  @apply border-rose-200/70 bg-rose-50/40;
+}
+
+.balance-legend-row-zero {
+  @apply border-zinc-200/80 bg-zinc-50/60;
+}
+
+.balance-legend-head {
+  @apply flex min-w-0 items-center gap-1.5;
+}
+
+.balance-legend-dot {
+  @apply h-2 w-2 shrink-0 rounded-full ring-1 ring-white;
+}
+
+.balance-legend-label {
+  @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-600;
+}
+
+.balance-legend-meta {
+  @apply flex shrink-0 items-baseline gap-1.5 tabular-nums;
+}
+
+.balance-legend-count {
+  @apply text-xs font-bold text-zinc-900;
+}
+
+.balance-legend-pct {
+  @apply text-[10px] font-medium text-zinc-400;
+}
+
+.balance-legend-amount {
+  @apply text-[11px] font-semibold tabular-nums;
+}
+
+.balance-legend-amount-active {
+  @apply text-zinc-700;
+}
+
+.balance-legend-amount-zero {
+  @apply text-zinc-400;
+}
+
+.balance-breakdown-center-count {
+  @apply font-bold tabular-nums text-zinc-900;
+}
+
+.balance-breakdown-center-label {
+  @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400;
+}
+
 .admin-client-list {
   @apply space-y-3 p-4 sm:p-5;
 }
@@ -581,6 +837,58 @@ body {
 
 .admin-client-list-count {
   @apply rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-zinc-600;
+}
+
+.admin-zebra-list {
+  @apply overflow-hidden;
+}
+
+.admin-zebra-list .admin-zebra-row:nth-child(odd) {
+  @apply bg-white;
+}
+
+.admin-zebra-list .admin-zebra-row:nth-child(even) {
+  @apply bg-zinc-50/80;
+}
+
+.admin-sheet {
+  @apply overflow-x-auto border-t border-[#dadce0] text-[13px];
+}
+
+.admin-sheet-grid {
+  @apply min-w-[680px];
+}
+
+.admin-sheet-head {
+  @apply sticky top-0 z-[1];
+}
+
+.admin-sheet-cell {
+  @apply min-h-[2.375rem] border-b border-r border-[#e8eaed] px-3 py-2 leading-snug;
+}
+
+.admin-sheet-cell:last-child {
+  @apply border-r-0;
+}
+
+.admin-sheet-cell-head {
+  @apply border-b-[#dadce0] bg-[#f8f9fa] py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-600;
+}
+
+.admin-sheet-row:nth-child(odd) {
+  @apply bg-[#fafafa];
+}
+
+.admin-sheet-row:hover {
+  @apply bg-[#e8f0fe];
+}
+
+.admin-sheet-type-icon {
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-sm bg-white text-zinc-500 ring-1 ring-[#dadce0];
+}
+
+.admin-sheet-row:hover .admin-sheet-type-icon {
+  @apply bg-[#e8f0fe] ring-[#c6dafc];
 }
 
 .admin-client-row {
@@ -625,6 +933,26 @@ body {
 
 .admin-client-tab-overdue {
   @apply border-rose-200/80 bg-rose-50 text-rose-700;
+}
+
+.admin-client-tab-closed {
+  @apply border-emerald-200/80 bg-emerald-50 text-emerald-800;
+}
+
+.admin-client-tab-quote {
+  @apply border-blue-200/80 bg-blue-50 text-blue-800;
+}
+
+.admin-doc-filter-bar {
+  @apply mt-3 flex flex-wrap gap-1.5;
+}
+
+.admin-doc-filter-pill {
+  @apply rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-600 transition hover:border-zinc-300 hover:text-zinc-900;
+}
+
+.admin-doc-filter-pill-active {
+  @apply border-zinc-900 bg-zinc-900 text-white hover:border-zinc-900 hover:text-white;
 }
 
 .admin-client-chevron {
@@ -691,6 +1019,14 @@ body {
 
 .admin-settings-trash-foot {
   @apply flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 bg-zinc-50 px-4 py-3;
+}
+
+.admin-settings-profiles-head {
+  @apply grid grid-cols-[minmax(0,1fr)_5.5rem_7rem_6rem_5.5rem] gap-3 border-b border-zinc-300 bg-zinc-100 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600 sm:grid-cols-[minmax(0,1fr)_6rem_8.5rem_7rem_6rem];
+}
+
+.admin-settings-profiles-row {
+  @apply grid grid-cols-[minmax(0,1fr)_5.5rem_7rem_6rem_5.5rem] items-center gap-3 border-b border-zinc-200 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[minmax(0,1fr)_6rem_8.5rem_7rem_6rem];
 }
 
 .admin-settings-danger {

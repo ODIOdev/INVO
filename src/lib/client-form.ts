@@ -5,6 +5,11 @@ export type ClientFormData = {
   phone: string;
   url: string;
   profileImage: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  zipCode: string;
 };
 
 export const EMPTY_CLIENT_FORM: ClientFormData = {
@@ -14,7 +19,37 @@ export const EMPTY_CLIENT_FORM: ClientFormData = {
   phone: "",
   url: "",
   profileImage: "",
+  addressLine1: "",
+  addressLine2: "",
+  city: "",
+  state: "",
+  zipCode: "",
 };
+
+export type ClientAddressFields = Pick<
+  ClientFormData,
+  "addressLine1" | "addressLine2" | "city" | "state" | "zipCode"
+>;
+
+export function formatClientAddress(
+  address: Partial<ClientAddressFields>
+): string {
+  const line1 = address.addressLine1?.trim() ?? "";
+  const line2 = address.addressLine2?.trim() ?? "";
+  const city = address.city?.trim() ?? "";
+  const state = address.state?.trim() ?? "";
+  const zipCode = address.zipCode?.trim() ?? "";
+
+  const cityStateZip = [city, [state, zipCode].filter(Boolean).join(" ")]
+    .filter(Boolean)
+    .join(", ");
+
+  return [line1, line2, cityStateZip].filter(Boolean).join("\n");
+}
+
+export function hasClientAddress(address: Partial<ClientAddressFields>): boolean {
+  return Boolean(formatClientAddress(address));
+}
 
 export function formatPhoneNumber(value: string): string {
   let digits = value.replace(/\D/g, "");

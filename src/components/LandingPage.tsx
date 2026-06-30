@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { AdminProfile } from "@/lib/admin-auth-constants";
 
 const features = [
   {
@@ -19,7 +20,15 @@ const features = [
   },
 ];
 
-export default function LandingPage() {
+type LandingPageProps = {
+  profile?: AdminProfile | null;
+};
+
+export default function LandingPage({ profile = null }: LandingPageProps) {
+  const welcomeLine = profile
+    ? `Welcome back, ${profile.displayName}`
+    : "Welcome";
+
   return (
     <div className="min-h-screen bg-[#eceef1]">
       {/* Nav */}
@@ -46,7 +55,8 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="mx-auto max-w-5xl px-6 pb-16 pt-20 text-center sm:pt-28">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+        <p className="text-xl font-semibold text-zinc-700 sm:text-2xl">{welcomeLine}</p>
+        <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
           Over Drive OS
         </p>
         <h1 className="mt-4 text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">

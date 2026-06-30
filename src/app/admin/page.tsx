@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import AdminDataBinsPanel from "@/components/admin/AdminDataBinsPanel";
 import {
   isDataBinView,
   parseAdminView,
 } from "@/components/admin/admin-nav";
 import { getAdminDashboardStats } from "@/lib/admin-dashboard";
+import { getAdminPageStorageScope } from "@/lib/admin-page-scope";
 import {
   hasEmailConfig,
   hasResendConfig,
@@ -31,29 +33,39 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const initialView = parseAdminView(view);
   const initialBin = isDataBinView(initialView) ? initialView : "clients";
 
+  const scope = await getAdminPageStorageScope();
+
   const [bins, initialRecords, dashboardStats] = await Promise.all([
-    getBinSummaries(),
-    getRecordsByBin(initialBin),
-    getAdminDashboardStats(),
+    getBinSummaries(scope),
+    getRecordsByBin(scope, initialBin),
+    getAdminDashboardStats(scope),
   ]);
 
   return (
-    <AdminDataBinsPanel
-      initialBins={bins}
-      initialRecords={initialRecords}
-      initialView={initialView}
-      dashboardStats={dashboardStats}
-      integrations={{
-        backend: getStorageBackend(),
-        stripeConfigured: hasStripeConfig(),
-        emailConfigured: hasEmailConfig(),
-        emailProvider: hasResendConfig()
-          ? "Resend"
-          : hasSmtpConfig()
-            ? "SMTP"
-            : null,
-        smsConfigured: hasTwilioConfig(),
-      }}
-    />
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#eceef1] text-sm text-zinc-500">
+          Loading dashboard…
+        </div>
+      }
+    >
+      <AdminDataBinsPanel
+        initialBins={bins}
+        initialRecords={initialRecords}
+        initialView={initialView}
+        dashboardStats={dashboardStats}
+        integrations={{
+          backend: getStorageBackend(),
+          stripeConfigured: hasStripeConfig(),
+          emailConfigured: hasEmailConfig(),
+          emailProvider: hasResendConfig()
+            ? "Resend"
+            : hasSmtpConfig()
+              ? "SMTP"
+              : null,
+          smsConfigured: hasTwilioConfig(),
+        }}
+      />
+    </Suspense>
   );
 }

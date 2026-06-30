@@ -1,7 +1,8 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { Redis } from "@upstash/redis";
-import type { DatabaseSchema } from "./dataBins";
+import type { DatabaseSchema, StoredRecord } from "./dataBins";
+import { MASTER_PROFILE_ID } from "@/lib/admin-auth-constants";
 
 export const DB_VERSION = 1;
 export const REDIS_DB_KEY = "overdrive:internal-db";
@@ -14,17 +15,39 @@ export function emptyDatabase(): DatabaseSchema {
     version: DB_VERSION,
     records: [],
     deletedRecords: [],
+    adminProfiles: [],
     lastSyncedAt: null,
   };
 }
 
+function migrateRecordProfileIds(records: StoredRecord[]): StoredRecord[] {
+  return records.map((record) =>
+    record.profileId
+      ? record
+      : { ...record, profileId: MASTER_PROFILE_ID }
+  );
+}
+
 function normalizeDatabase(parsed: DatabaseSchema): DatabaseSchema {
+  const records = migrateRecordProfileIds(
+    Array.isArray(parsed.records) ? parsed.records : []
+  );
+  const deletedRecords = (
+    Array.isArray(parsed.deletedRecords) ? parsed.deletedRecords : []
+  ).map((entry) => ({
+    ...entry,
+    record: migrateRecordProfileIds([entry.record])[0],
+  }));
+
   return {
     version: parsed.version ?? DB_VERSION,
-    records: Array.isArray(parsed.records) ? parsed.records : [],
-    deletedRecords: Array.isArray(parsed.deletedRecords)
-      ? parsed.deletedRecords
-      : [],
+    records,
+    deletedRecords,
+    adminProfiles: Array.isArray(parsed.adminProfiles) ? parsed.adminProfiles : [],
+    masterAccount:
+      parsed.masterAccount && typeof parsed.masterAccount === "object"
+        ? parsed.masterAccount
+        : undefined,
     lastSyncedAt: parsed.lastSyncedAt ?? null,
   };
 }
